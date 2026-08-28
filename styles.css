@@ -789,3 +789,177 @@ svg {
     justify-content: center;
   }
 }
+
+
+/* =========================================================
+   Rooms page — filter chips, checkboxes, room cards
+   ========================================================= */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chip:hover {
+  background: var(--teal-pale);
+  border-color: var(--teal-light);
+}
+
+.chip.is-active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #FFFFFF;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.checkbox-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px 8px 12px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.checkbox-chip:has(input:checked) {
+  background: var(--teal-pale);
+  border-color: var(--teal-light);
+  color: var(--teal-darkest);
+  font-weight: 600;
+}
+
+.checkbox-chip input {
+  accent-color: var(--teal);
+  width: 15px;
+  height: 15px;
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.room-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.room-card:hover {
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+}
+
+.room-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.room-card__cap {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.room-card h3 {
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.room-card__hostel {
+  margin-top: 3px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.room-card__occupancy {
+  margin-top: 14px;
+}
+
+.room-card__bar {
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.room-card__bar span {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+  border-radius: var(--radius-pill);
+}
+
+.room-card__bar--warning span {
+  background: var(--amber);
+}
+
+.room-card__bar--full span {
+  background: var(--red);
+}
+
+.room-card__occupancy p {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.room-card__price {
+  margin-top: 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--teal-darkest);
+}
+
+.room-card__price span {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.room-card .hostel-card__actions {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+}
+
+/* Responsive additions */
+@media (max-width: 1180px) {
+  .room-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .room-grid {
+    grid-template-columns: 1fr;
+  }
+}

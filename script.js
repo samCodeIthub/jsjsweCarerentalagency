@@ -1,6 +1,6 @@
 // =========================================================
 // weCare Admin — script.js
-// Sidebar toggle, table search, and quick-add form handling
+// Sidebar toggle, search, filters, and add-item form handling
 // =========================================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,6 +11,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initHostelSearch();
   initAddHostelForm();
   initFileDrop();
+  initRoomFilters();
+  initRoomSearch();
+  initAddRoomForm();
 });
 
 /* ---------------------------------------------------------
@@ -27,7 +30,7 @@ function initSidebar() {
     sidebar.classList.add('is-open');
     scrim.classList.add('is-visible');
     menuBtn.setAttribute('aria-expanded', 'true');
-    document.body.style.overflow = 'hidden'; // lock background scroll
+    document.body.style.overflow = 'hidden';
   };
 
   const closeSidebar = () => {
@@ -44,7 +47,6 @@ function initSidebar() {
   menuBtn.addEventListener('click', toggleSidebar);
   scrim.addEventListener('click', closeSidebar);
 
-  // Close with Escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && sidebar.classList.contains('is-open')) {
       closeSidebar();
@@ -52,21 +54,19 @@ function initSidebar() {
     }
   });
 
-  // Close the sidebar after choosing a nav link (mobile only)
   sidebar.querySelectorAll('.nav__link').forEach((link) => {
     link.addEventListener('click', () => {
       if (window.innerWidth <= 980) closeSidebar();
     });
   });
 
-  // If the viewport grows past the mobile breakpoint, reset any open state
   window.addEventListener('resize', () => {
     if (window.innerWidth > 980) closeSidebar();
   });
 }
 
 /* ---------------------------------------------------------
-   2. Live search over the inventory table
+   2. Live search over the inventory table (Dashboard)
 --------------------------------------------------------- */
 function initTableSearch() {
   const searchInput = document.querySelector('.search input');
@@ -88,7 +88,7 @@ function initTableSearch() {
 }
 
 /* ---------------------------------------------------------
-   3. Quick Add: New Room Type — adds a row to the table
+   3. Quick Add: New Room Type (Dashboard) — adds a table row
 --------------------------------------------------------- */
 function initQuickAddForm() {
   const form = document.getElementById('quickAddForm');
@@ -99,7 +99,7 @@ function initQuickAddForm() {
     e.preventDefault();
 
     const hostel = form.hostel.value;
-    const capacity = form.capacity.value; // "1" | "2" | "4"
+    const capacity = form.capacity.value;
     const price = form.price.value.trim();
     const totalRooms = form.totalRooms.value.trim();
 
@@ -118,7 +118,7 @@ function initQuickAddForm() {
       roomType: capacityLabel,
       capacity: studentsLabel,
       price: formattedPrice,
-      status: 'available', // new room types start out available
+      status: 'available',
     });
 
     table.prepend(row);
@@ -154,15 +154,19 @@ function buildRow({ hostel, roomType, capacity, price, status }) {
   return tr;
 }
 
-// Event delegation so Edit/Remove work for table rows AND hostel cards,
-// including ones added dynamically after page load
+// Event delegation so Edit/Remove work for table rows, hostel cards,
+// AND room cards — including ones added dynamically after page load
 document.addEventListener('click', (e) => {
   const removeBtn = e.target.closest('.link-btn--danger');
   if (removeBtn) {
     const row = removeBtn.closest('tr');
-    const card = removeBtn.closest('.hostel-card');
-    const target = row || card;
-    const confirmText = card ? 'Remove this hostel from your portfolio?' : 'Remove this room type from the inventory?';
+    const hostelCard = removeBtn.closest('.hostel-card');
+    const roomCard = removeBtn.closest('.room-card');
+    const target = row || hostelCard || roomCard;
+
+    let confirmText = 'Remove this room type from the inventory?';
+    if (hostelCard) confirmText = 'Remove this hostel from your portfolio?';
+    if (roomCard) confirmText = 'Remove this room type? This will unlist it for students.';
 
     if (target && confirm(confirmText)) {
       target.style.transition = 'opacity 0.2s ease';
@@ -175,8 +179,12 @@ document.addEventListener('click', (e) => {
   const editBtn = e.target.closest('.link-btn:not(.link-btn--danger)');
   if (editBtn && (editBtn.closest('.table__actions') || editBtn.closest('.hostel-card__actions'))) {
     const row = editBtn.closest('tr');
-    const card = editBtn.closest('.hostel-card');
-    const name = row?.children[0]?.textContent || card?.querySelector('h3')?.textContent || 'this item';
+    const hostelCard = editBtn.closest('.hostel-card');
+    const roomCard = editBtn.closest('.room-card');
+    const name = row?.children[0]?.textContent
+      || hostelCard?.querySelector('h3')?.textContent
+      || roomCard?.querySelector('h3')?.textContent
+      || 'this item';
     alert(`Editing "${name}" — hook this up to your edit flow.`);
   }
 });
@@ -241,7 +249,7 @@ function initAddHostelForm() {
 
     const name = form.hostelName.value.trim();
     const location = form.hostelLocation.value.trim();
-    const status = form.hostelStatus.value; // "active" | "draft"
+    const status = form.hostelStatus.value;
     const rooms = form.hostelRooms.value.trim();
 
     if (!name || !location) {
@@ -285,7 +293,6 @@ function buildHostelCard({ name, location, status, rooms }) {
       <button class="link-btn link-btn--danger" type="button">Remove</button>
     </div>
   `;
-  // Set text via textContent (not innerHTML) to avoid any markup injection from form input
   article.querySelector('h3').textContent = name;
   article.querySelector('.hostel-card__meta').textContent = location;
 
@@ -345,8 +352,7 @@ function resetFileDropLabel() {
 }
 
 /* ---------------------------------------------------------
-   4. "Add New Hostel" button — jumps to the quick-add panel
-   (Swap this for a modal/dedicated page later if you build one)
+   4. "Add New Hostel" button (Dashboard) — jumps to quick-add panel
 --------------------------------------------------------- */
 function initAddHostelShortcut() {
   const btn = document.getElementById('addHostelBtn');
@@ -357,4 +363,140 @@ function initAddHostelShortcut() {
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     form.hostel.focus();
   });
+}
+
+/* ---------------------------------------------------------
+   8. Rooms page — filter chips (All / 1 / 2 / 4-in-a-room)
+--------------------------------------------------------- */
+function initRoomFilters() {
+  const chips = document.querySelectorAll('.filter-chips .chip');
+  const grid = document.querySelector('.room-grid');
+  if (!chips.length || !grid) return;
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      chips.forEach((c) => c.classList.remove('is-active'));
+      chip.classList.add('is-active');
+
+      const filter = chip.dataset.filter;
+      grid.querySelectorAll('.room-card').forEach((card) => {
+        const matches = filter === 'all' || card.dataset.capacity === filter;
+        card.style.display = matches ? '' : 'none';
+      });
+    });
+  });
+}
+
+/* ---------------------------------------------------------
+   9. Rooms page — search room cards
+--------------------------------------------------------- */
+function initRoomSearch() {
+  const searchInput = document.querySelector('.search input');
+  const grid = document.querySelector('.room-grid');
+  if (!searchInput || !grid) return;
+
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.trim().toLowerCase();
+    grid.querySelectorAll('.room-card').forEach((card) => {
+      const title = card.querySelector('h3')?.textContent.toLowerCase() || '';
+      const hostel = card.querySelector('.room-card__hostel')?.textContent.toLowerCase() || '';
+      const matches = title.includes(query) || hostel.includes(query);
+      card.style.display = matches ? '' : 'none';
+    });
+  });
+}
+
+/* ---------------------------------------------------------
+   10. Rooms page — Add New Room Type form
+--------------------------------------------------------- */
+function initAddRoomForm() {
+  const openLink = document.getElementById('openAddRoomBtn');
+  const panel = document.getElementById('add-room');
+  if (openLink && panel) {
+    openLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      panel.querySelector('#roomHostel')?.focus();
+    });
+  }
+
+  const form = document.getElementById('addRoomForm');
+  const grid = document.querySelector('.room-grid');
+  if (!form || !grid) return;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const hostel = form.roomHostel.value;
+    const capacity = form.roomCapacity.value;
+    const price = form.roomPrice.value.trim();
+    const beds = form.roomBeds.value.trim();
+
+    if (!price || !beds) {
+      flashInvalid(form.roomPrice.closest('.field').querySelector('input, .input-prefix'));
+      flashInvalid(form.roomBeds);
+      return;
+    }
+
+    const capacityLabel = capacity === '1' ? '1-in-a-Room · Private' : `${capacity}-in-a-Room · Shared`;
+    const formattedPrice = `GHS ${Number(price).toLocaleString('en-US')}`;
+
+    const card = buildRoomCard({
+      hostel,
+      capacity,
+      title: capacityLabel,
+      price: formattedPrice,
+      beds: Number(beds),
+      filled: 0,
+    });
+
+    grid.prepend(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    flashCardSuccess(card);
+
+    const activeChip = document.querySelector('.filter-chips .chip.is-active');
+    if (activeChip && activeChip.dataset.filter !== 'all' && activeChip.dataset.filter !== capacity) {
+      card.style.display = 'none';
+    }
+
+    form.reset();
+    form.roomHostel.focus();
+  });
+}
+
+function buildRoomCard({ hostel, capacity, title, price, beds, filled }) {
+  const pct = beds ? Math.round((filled / beds) * 100) : 0;
+  const isFull = filled >= beds && beds > 0;
+  const isAlmostFull = !isFull && beds > 0 && filled / beds >= 0.85;
+
+  let pillClass = 'pill--available';
+  let pillLabel = 'Available';
+  let barClass = '';
+  if (isFull) { pillClass = 'pill--full'; pillLabel = 'Full'; barClass = 'room-card__bar--full'; }
+  else if (isAlmostFull) { pillClass = 'pill--warning'; pillLabel = '1 Spot Left'; barClass = 'room-card__bar--warning'; }
+
+  const article = document.createElement('article');
+  article.className = 'room-card';
+  article.dataset.capacity = capacity;
+  article.innerHTML = `
+    <div class="room-card__top">
+      <span class="pill ${pillClass}">${pillLabel}</span>
+      <span class="room-card__cap">${capacity} / room</span>
+    </div>
+    <h3></h3>
+    <p class="room-card__hostel"></p>
+    <div class="room-card__occupancy">
+      <div class="room-card__bar ${barClass}"><span style="width:${pct}%"></span></div>
+      <p>${filled} / ${beds} beds filled</p>
+    </div>
+    <p class="room-card__price">${price} <span>/ semester</span></p>
+    <div class="hostel-card__actions">
+      <button class="link-btn" type="button">Edit</button>
+      <button class="link-btn link-btn--danger" type="button">Remove</button>
+    </div>
+  `;
+  article.querySelector('h3').textContent = title;
+  article.querySelector('.room-card__hostel').textContent = hostel;
+
+  return article;
 }
