@@ -1,258 +1,247 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard · weCare Admin</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard · weCare Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
 
-<div class="app">
+  <div class="app">
 
-  <!-- ============ SIDEBAR ============ -->
-  <aside class="sidebar" id="sidebar">
-    <div class="brand">
-      <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true">
-        <path d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z" fill="currentColor"/>
-        <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C"/>
-        <circle cx="108" cy="128" r="4.5" fill="#FF7A59"/>
-      </svg>
-      <span class="brand__name">we<b>Care</b></span>
-    </div>
-    <p class="sidebar__label">Admin Panel</p>
-
-    <nav class="nav" aria-label="Admin navigation">
-
-      <a class="nav__link is-active" href="index.html" aria-current="page">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="3" y="3" width="7" height="9" rx="1.5" />
-          <rect x="14" y="3" width="7" height="5" rx="1.5" />
-          <rect x="14" y="12" width="7" height="9" rx="1.5" />
-          <rect x="3" y="16" width="7" height="5" rx="1.5" />
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true">
+          <path
+            d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z"
+            fill="currentColor" />
+          <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C" />
+          <circle cx="108" cy="128" r="4.5" fill="#FF7A59" />
         </svg>
-        Dashboard
-      </a>
-
-      
-      <a class="nav__link" href="hostels.html">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V9l8-5 8 5v12"/><path d="M9 21v-6h6v6"/></svg>
-        Hostels
-      </a>
-      <a class="nav__link" href="rooms.html">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16"/><path d="M10 10v10"/></svg>
-        Rooms
-      </a>
-      <a class="nav__link" href="#">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/></svg>
-        Bookings
-      </a>
-      <a class="nav__link" href="#">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>
-        Students
-      </a>
-      <a class="nav__link" href="#">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg>
-        Payments
-      </a>
-      <a class="nav__link" href="#">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-        Settings
-      </a>
-    </nav>
-
-    <div class="sidebar__footer">
-      <a class="nav__link" href="#">
-        <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
-        Log Out
-      </a>
-    </div>
-  </aside>
-
-  <div class="sidebar__scrim" id="scrim"></div>
-
-  <!-- ============ MAIN ============ -->
-  <div class="main">
-
-    <!-- Topbar -->
-    <header class="topbar">
-      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
-      </button>
-
-      <div class="topbar__title">
-        <h1>Manage Hostels &amp; Rooms</h1>
-        <p>Add, edit, or remove hostels and set room capacity &amp; pricing</p>
+        <span class="brand__name">we<b>Care</b></span>
       </div>
+      <p class="sidebar__label">Admin Panel</p>
 
-      <div class="topbar__actions">
-        <button class="icon-btn" type="button" aria-label="Notifications">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
-          <span class="icon-btn__dot" aria-hidden="true"></span>
-        </button>
-        <button class="btn btn--primary" type="button" id="addHostelBtn">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-          <span>Add New Hostel</span>
-        </button>
-        <div class="avatar" title="Admin account">SA</div>
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="nav__link is-active" href="index.html" aria-current="page">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1.5" />
+            <rect x="14" y="3" width="7" height="5" rx="1.5" />
+            <rect x="14" y="12" width="7" height="9" rx="1.5" />
+            <rect x="3" y="16" width="7" height="5" rx="1.5" />
+          </svg>
+          Dashboard
+        </a>
+        <a class="nav__link" href="hostels.html">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 21V9l8-5 8 5v12" />
+            <path d="M9 21v-6h6v6" />
+          </svg>
+          Hostels
+        </a>
+        <a class="nav__link" href="rooms.html">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <path d="M4 10h16" />
+            <path d="M10 10v10" />
+          </svg>
+          Rooms
+        </a>
+        <a class="nav__link" href="bookings.html">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M3 10h18" />
+            <path d="M8 3v4" />
+            <path d="M16 3v4" />
+          </svg>
+          Bookings
+        </a>
+        <a class="nav__link" href="#">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="3.5" />
+            <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" />
+          </svg>
+          Students
+        </a>
+        <a class="nav__link" href="#">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="6" width="18" height="12" rx="2" />
+            <path d="M3 10h18" />
+            <path d="M7 15h4" />
+          </svg>
+          Payments
+        </a>
+        <a class="nav__link" href="#">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+          </svg>
+          Settings
+        </a>
+      </nav>
+
+      <div class="sidebar__footer">
+        <a class="nav__link" href="#">
+          <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <path d="M16 17l5-5-5-5" />
+            <path d="M21 12H9" />
+          </svg>
+          Log Out
+        </a>
       </div>
-    </header>
+    </aside>
 
-    <main class="content">
+    <div class="sidebar__scrim" id="scrim"></div>
 
-      <!-- Stat cards -->
-      <section class="stats" aria-label="Overview statistics">
-        <article class="stat-card stat-card--teal">
-          <p class="stat-card__label">Total Hostels</p>
-          <p class="stat-card__value">18</p>
-        </article>
-        <article class="stat-card stat-card--teal">
-          <p class="stat-card__label">Total Rooms</p>
-          <p class="stat-card__value">342</p>
-        </article>
-        <article class="stat-card stat-card--red">
-          <p class="stat-card__label">Rooms Full</p>
-          <p class="stat-card__value">96</p>
-        </article>
-        <article class="stat-card stat-card--amber">
-          <p class="stat-card__label">Pending Requests</p>
-          <p class="stat-card__value">7</p>
-        </article>
-      </section>
+    <!-- ============ MAIN ============ -->
+    <div class="main">
 
-      <!-- Inventory table -->
-      <section class="panel">
-        <div class="panel__header">
-          <h2>Hostel &amp; Room Inventory</h2>
-          <label class="search">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-            <input type="search" placeholder="Search hostels or rooms…" aria-label="Search hostels or rooms">
-          </label>
+      <!-- Topbar -->
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Open menu" aria-expanded="false"
+          aria-controls="sidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M3 12h18" />
+            <path d="M3 18h18" />
+          </svg>
+        </button>
+
+        <div class="topbar__title">
+          <h1>Manage Hostels &amp; Rooms</h1>
+          <p>Add, edit, or remove hostels and set room capacity &amp; pricing</p>
         </div>
 
-        <div class="table-scroll">
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">Hostel</th>
-                <th scope="col">Room Type</th>
-                <th scope="col">Capacity</th>
-                <th scope="col">Price / Semester</th>
-                <th scope="col">Status</th>
-                <th scope="col" class="table__actions-head">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td data-label="Hostel">Ambassador Hall</td>
-                <td data-label="Room Type">2-in-a-room</td>
-                <td data-label="Capacity">2 students</td>
-                <td data-label="Price">GHS 1,800</td>
-                <td data-label="Status"><span class="pill pill--available">Available</span></td>
-                <td data-label="Actions" class="table__actions">
-                  <button class="link-btn" type="button">Edit</button>
-                  <button class="link-btn link-btn--danger" type="button">Remove</button>
-                </td>
-              </tr>
-              <tr>
-                <td data-label="Hostel">Unity Lodge</td>
-                <td data-label="Room Type">4-in-a-room</td>
-                <td data-label="Capacity">4 students</td>
-                <td data-label="Price">GHS 1,050</td>
-                <td data-label="Status"><span class="pill pill--full">Full</span></td>
-                <td data-label="Actions" class="table__actions">
-                  <button class="link-btn" type="button">Edit</button>
-                  <button class="link-btn link-btn--danger" type="button">Remove</button>
-                </td>
-              </tr>
-              <tr>
-                <td data-label="Hostel">Serene Villa</td>
-                <td data-label="Room Type">1-in-a-room</td>
-                <td data-label="Capacity">1 student</td>
-                <td data-label="Price">GHS 2,600</td>
-                <td data-label="Status"><span class="pill pill--available">Available</span></td>
-                <td data-label="Actions" class="table__actions">
-                  <button class="link-btn" type="button">Edit</button>
-                  <button class="link-btn link-btn--danger" type="button">Remove</button>
-                </td>
-              </tr>
-              <tr>
-                <td data-label="Hostel">Peace Hostel</td>
-                <td data-label="Room Type">2-in-a-room</td>
-                <td data-label="Capacity">2 students</td>
-                <td data-label="Price">GHS 1,500</td>
-                <td data-label="Status"><span class="pill pill--warning">1 Spot Left</span></td>
-                <td data-label="Actions" class="table__actions">
-                  <button class="link-btn" type="button">Edit</button>
-                  <button class="link-btn link-btn--danger" type="button">Remove</button>
-                </td>
-              </tr>
-              <tr>
-                <td data-label="Hostel">Golden Gate Hall</td>
-                <td data-label="Room Type">4-in-a-room</td>
-                <td data-label="Capacity">4 students</td>
-                <td data-label="Price">GHS 980</td>
-                <td data-label="Status"><span class="pill pill--available">Available</span></td>
-                <td data-label="Actions" class="table__actions">
-                  <button class="link-btn" type="button">Edit</button>
-                  <button class="link-btn link-btn--danger" type="button">Remove</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="topbar__actions">
+          <button class="icon-btn" type="button" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
+              <path d="M10 21a2 2 0 0 0 4 0" />
+            </svg>
+            <span class="icon-btn__dot" aria-hidden="true"></span>
+          </button>
+          <a class="btn btn--primary" href="hostels.html#add-hostel">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+            <span>Add New Hostel</span>
+          </a>
+          <div class="avatar" title="Admin account">SA</div>
         </div>
-      </section>
+      </header>
 
-      <!-- Quick add form -->
-      <section class="panel">
-        <h2>Quick Add: New Room Type</h2>
-        <form class="form-grid" id="quickAddForm">
-          <div class="field">
-            <label for="hostel">Hostel</label>
-            <select id="hostel" name="hostel">
-              <option>Ambassador Hall</option>
-              <option>Unity Lodge</option>
-              <option>Serene Villa</option>
-              <option>Peace Hostel</option>
-              <option>Golden Gate Hall</option>
-            </select>
+      <main class="content">
+
+        <!-- Stat cards -->
+        <section class="stats" aria-label="Overview statistics">
+          <article class="stat-card stat-card--teal">
+            <p class="stat-card__label">Total Hostels</p>
+            <p class="stat-card__value" id="statTotalHostels">0</p>
+          </article>
+          <article class="stat-card stat-card--teal">
+            <p class="stat-card__label">Total Room Types</p>
+            <p class="stat-card__value" id="statTotalRooms">0</p>
+          </article>
+          <article class="stat-card stat-card--red">
+            <p class="stat-card__label">Rooms Full</p>
+            <p class="stat-card__value" id="statRoomsFull">0</p>
+          </article>
+          <article class="stat-card stat-card--amber">
+            <p class="stat-card__label">Almost Full</p>
+            <p class="stat-card__value" id="statAlmostFull">0</p>
+          </article>
+        </section>
+
+        <!-- Inventory table -->
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Hostel &amp; Room Inventory</h2>
+            <label class="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+              </svg>
+              <input type="search" placeholder="Search hostels or rooms…" aria-label="Search hostels or rooms">
+            </label>
           </div>
-          <div class="field">
-            <label for="capacity">Capacity</label>
-            <select id="capacity" name="capacity">
-              <option value="1">1 student / room</option>
-              <option value="2" selected>2 students / room</option>
-              <option value="4">4 students / room</option>
-            </select>
+
+          <div class="table-scroll">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Hostel</th>
+                  <th scope="col">Room Type</th>
+                  <th scope="col">Capacity</th>
+                  <th scope="col">Price / Semester</th>
+                  <th scope="col">Beds</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="table__actions-head">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryBody">
+                <!-- Rows are rendered by script.js from saved data -->
+              </tbody>
+            </table>
           </div>
-          <div class="field">
-            <label for="price">Price (per semester)</label>
-            <div class="input-prefix">
-              <span>GHS</span>
-              <input type="number" id="price" name="price" placeholder="1,800" min="0" step="10">
+        </section>
+
+        <!-- Quick add form -->
+        <section class="panel">
+          <h2>Quick Add: New Room Type</h2>
+          <form class="form-grid" id="quickAddForm">
+            <div class="field">
+              <label for="hostel">Hostel</label>
+              <select id="hostel" name="hostel">
+                <!-- Options are populated by script.js from saved hostels -->
+              </select>
             </div>
-          </div>
-          <div class="field">
-            <label for="totalRooms">Total Rooms</label>
-            <input type="number" id="totalRooms" name="totalRooms" placeholder="30" min="0">
-          </div>
-          <div class="field field--action">
-            <button class="btn btn--primary" type="submit">Save Room Type</button>
-          </div>
-        </form>
-      </section>
+            <div class="field">
+              <label for="capacity">Capacity</label>
+              <select id="capacity" name="capacity">
+                <option value="1">1 student / room</option>
+                <option value="2" selected>2 students / room</option>
+                <option value="4">4 students / room</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="price">Price (per semester)</label>
+              <div class="input-prefix">
+                <span>GHS</span>
+                <input type="number" id="price" name="price" placeholder="1,800" min="0" step="10">
+              </div>
+            </div>
+            <div class="field">
+              <label for="totalRooms">Total Beds</label>
+              <input type="number" id="totalRooms" name="totalRooms" placeholder="30" min="0">
+            </div>
+            <div class="field field--action">
+              <button class="btn btn--primary" type="submit">Save Room Type</button>
+            </div>
+          </form>
+        </section>
 
-    </main>
+      </main>
 
-    <footer class="page-footer">
-      <p>weCare Rental Agency · Admin Console</p>
-    </footer>
+      <footer class="page-footer">
+        <p>weCare Rental Agency · Admin Console · <button class="reset-link" type="button" id="resetDemoBtn">Reset demo
+            data</button></p>
+      </footer>
+    </div>
   </div>
-</div>
 
-<script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
+
 </html>
