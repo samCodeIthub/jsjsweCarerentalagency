@@ -1,10 +1,10 @@
 // =========================================================
 // weCare Admin — script.js
-// localStorage-backed data layer: hostels, rooms, and bookings,
-// shared across index.html / hostels.html / rooms.html /
-// bookings.html. This is a trial/demo data layer — swap the
-// storage functions below for real API calls when you move to
-// a backend.
+// localStorage-backed data layer: hostels, rooms, and bookings
+// (with batch-number verification + check-in), shared across
+// index.html / hostels.html / rooms.html / bookings.html.
+// This is a trial/demo data layer — swap the storage functions
+// below for real API calls when you move to a backend.
 // =========================================================
 
 const HOSTELS_KEY = 'wecare_hostels_v1';
@@ -30,10 +30,10 @@ const DEFAULT_ROOMS = [
 ];
 
 const DEFAULT_BOOKINGS = [
-  { id: 'b1', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', price: 1800, studentName: 'Kwame Owusu', bookedAt: '2026-08-12', status: 'confirmed' },
-  { id: 'b2', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', price: 1800, studentName: 'Efua Mensah', bookedAt: '2026-08-14', status: 'confirmed' },
-  { id: 'b3', roomId: 'r4', hostel: 'Peace Hostel', roomType: '2-in-a-Room', price: 1500, studentName: 'Yaw Boateng', bookedAt: '2026-08-15', status: 'confirmed' },
-  { id: 'b4', roomId: 'r2', hostel: 'Unity Lodge', roomType: '4-in-a-Room', price: 1050, studentName: 'Ama Serwaa', bookedAt: '2026-08-10', status: 'cancelled' },
+  { id: 'b1', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', capacity: '2', price: 1800, studentName: 'Kwame Owusu', batchNumber: 'WC-7F3K9A', bookedAt: '2026-08-12', status: 'confirmed', checkedIn: true },
+  { id: 'b2', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', capacity: '2', price: 1800, studentName: 'Efua Mensah', batchNumber: 'WC-2M8P4Q', bookedAt: '2026-08-14', status: 'confirmed', checkedIn: false },
+  { id: 'b3', roomId: 'r4', hostel: 'Peace Hostel', roomType: '2-in-a-Room', capacity: '2', price: 1500, studentName: 'Yaw Boateng', batchNumber: 'WC-9R5T2H', bookedAt: '2026-08-15', status: 'confirmed', checkedIn: false },
+  { id: 'b4', roomId: 'r2', hostel: 'Unity Lodge', roomType: '4-in-a-Room', capacity: '4', price: 1050, studentName: 'Ama Serwaa', batchNumber: 'WC-4X7N3B', bookedAt: '2026-08-10', status: 'cancelled', checkedIn: false },
 ];
 
 /* ---------------------------------------------------------
@@ -79,6 +79,16 @@ function resetDemoData() {
    Booking actions — shared by the Rooms page "Book a Bed"
    button and the Bookings page "Record a Booking" form
 --------------------------------------------------------- */
+
+// Excludes visually ambiguous characters (0/O, 1/I) so batch
+// numbers are easy to read aloud and re-type at the front desk.
+function generateBatchNumber() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return `WC-${code}`;
+}
+
 function bookRoom(roomId, studentName) {
   const rooms = getRooms();
   const room = rooms.find((r) => r.id === roomId);
@@ -94,10 +104,13 @@ function bookRoom(roomId, studentName) {
     roomId: room.id,
     hostel: room.hostel,
     roomType: room.capacity === '1' ? '1-in-a-Room' : `${room.capacity}-in-a-Room`,
+    capacity: room.capacity,
     price: room.price,
     studentName,
-    bookedAt: new Date().toISOString().slice(0, 10),
+    batchNumber: generateBatchNumber(),
+    bookedAt: new Date().toISOString().slice(0, 10), // date of payment
     status: 'confirmed',
+    checkedIn: false,
   });
   setBookings(bookings);
   return true;
@@ -117,6 +130,19 @@ function cancelBooking(bookingId) {
     room.filled = Number(room.filled) - 1;
     setRooms(rooms);
   }
+}
+
+// Marks a student as verified and physically checked in. Once
+// checked in, a booking can no longer be cancelled — this protects
+// against someone else's cancellation freeing up a bed that's
+// already occupied.
+function checkInBooking(bookingId) {
+  const bookings = getBookings();
+  const booking = bookings.find((b) => b.id === bookingId);
+  if (!booking || booking.status === 'cancelled' || booking.checkedIn) return;
+
+  booking.checkedIn = true;
+  setBookings(bookings);
 }
 
 /* ---------------------------------------------------------
@@ -396,52 +422,73 @@ function renderBookingsPage() {
     if (available.some((r) => r.id === prev)) roomSelect.value = prev;
   }
 
-  const confirmed = bookings.filter((b) => b.status === 'confirmed');
-  const cancelled = bookings.filter((b) => b.status === 'cancelled');
-  const revenue = confirmed.reduce((s, b) => s + (Number(b.price) || 0), 0);
+  const notCancelled = bookings.filter((b) => b.status !== 'cancelled');
+  const awaitingCheckIn = notCancelled.filter((b) => !b.checkedIn).length;
+  const checkedIn = notCancelled.filter((b) => b.checkedIn).length;
+  const revenue = notCancelled.reduce((s, b) => s + (Number(b.price) || 0), 0);
 
   setText('statTotalBookings', bookings.length);
-  setText('statConfirmedBookings', confirmed.length);
-  setText('statCancelledBookings', cancelled.length);
+  setText('statAwaitingCheckIn', awaitingCheckIn);
+  setText('statCheckedIn', checkedIn);
   setText('statRevenue', `GHS ${revenue.toLocaleString('en-US')}`);
 
   tbody.innerHTML = bookings.length
     ? bookings.map(bookingRowHtml).join('')
-    : `<tr><td colspan="7" class="empty-state">No bookings yet — book a bed from the Rooms page or record one above.</td></tr>`;
+    : `<tr><td colspan="8" class="empty-state">No bookings yet — book a bed from the Rooms page or record one above.</td></tr>`;
 
   reapplyBookingsSearch();
 }
 
 function bookingRowHtml(booking) {
   const isCancelled = booking.status === 'cancelled';
-  const pillClass = isCancelled ? 'pill--draft' : 'pill--available';
-  const label = isCancelled ? 'Cancelled' : 'Confirmed';
+  const isCheckedIn = !isCancelled && booking.checkedIn;
+
+  let pillClass = 'pill--warning';
+  let label = 'Awaiting Check-in';
+  if (isCancelled) { pillClass = 'pill--draft'; label = 'Cancelled'; }
+  else if (isCheckedIn) { pillClass = 'pill--available'; label = 'Checked In'; }
+
+  const batchHtml = isCancelled
+    ? `<span class="batch-code batch-code--void">${escapeHtml(booking.batchNumber)}</span><span class="void-tag">VOID</span>`
+    : `<span class="batch-code">${escapeHtml(booking.batchNumber)}</span>`;
+
+  let actionsHtml = `<span class="table__muted-note">—</span>`;
+  if (!isCancelled && !isCheckedIn) {
+    actionsHtml = `
+      <button class="link-btn" type="button" data-action="check-in">Check In</button>
+      <button class="link-btn link-btn--danger" type="button" data-action="cancel-booking">Cancel</button>`;
+  } else if (isCheckedIn) {
+    actionsHtml = `<span class="table__muted-note">Checked In &#10003;</span>`;
+  }
 
   return `
-    <tr data-id="${booking.id}">
+    <tr data-id="${booking.id}" data-capacity="${booking.capacity || ''}">
+      <td data-label="Batch No.">${batchHtml}</td>
       <td data-label="Student">${escapeHtml(booking.studentName)}</td>
       <td data-label="Hostel">${escapeHtml(booking.hostel)}</td>
       <td data-label="Room Type">${escapeHtml(booking.roomType)}</td>
       <td data-label="Price">GHS ${Number(booking.price).toLocaleString('en-US')}</td>
-      <td data-label="Booked On">${escapeHtml(booking.bookedAt)}</td>
+      <td data-label="Date Paid">${escapeHtml(booking.bookedAt)}</td>
       <td data-label="Status"><span class="pill ${pillClass}">${label}</span></td>
-      <td data-label="Actions" class="table__actions">
-        ${isCancelled
-    ? `<span class="table__muted-note">—</span>`
-    : `<button class="link-btn link-btn--danger" type="button" data-action="cancel-booking">Cancel</button>`}
-      </td>
+      <td data-label="Actions" class="table__actions">${actionsHtml}</td>
     </tr>`;
 }
 
 function reapplyBookingsSearch() {
-  const input = document.querySelector('.search input');
   const tbody = document.getElementById('bookingsBody');
-  if (!input || !tbody) return;
-  const q = input.value.trim().toLowerCase();
+  if (!tbody) return;
+  const input = document.querySelector('.search input');
+  const q = input ? input.value.trim().toLowerCase() : '';
+  const activeChip = document.querySelector('#bookingsFilterChips .chip.is-active');
+  const filter = activeChip ? activeChip.dataset.filter : 'all';
+
   tbody.querySelectorAll('tr[data-id]').forEach((row) => {
-    const student = row.children[0]?.textContent.toLowerCase() || '';
-    const hostel = row.children[1]?.textContent.toLowerCase() || '';
-    row.style.display = (!q || student.includes(q) || hostel.includes(q)) ? '' : 'none';
+    const batch = row.children[0]?.textContent.toLowerCase() || '';
+    const student = row.children[1]?.textContent.toLowerCase() || '';
+    const hostel = row.children[2]?.textContent.toLowerCase() || '';
+    const matchesSearch = !q || student.includes(q) || hostel.includes(q) || batch.includes(q);
+    const matchesFilter = filter === 'all' || row.dataset.capacity === filter;
+    row.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
   });
 }
 
@@ -749,6 +796,22 @@ function initRecordBookingForm() {
 }
 
 /* ---------------------------------------------------------
+   Bookings page — room-type filter chips
+--------------------------------------------------------- */
+function initBookingsFilters() {
+  const tbody = document.getElementById('bookingsBody');
+  if (!tbody) return;
+
+  document.querySelectorAll('#bookingsFilterChips .chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#bookingsFilterChips .chip').forEach((c) => c.classList.remove('is-active'));
+      chip.classList.add('is-active');
+      reapplyBookingsSearch();
+    });
+  });
+}
+
+/* ---------------------------------------------------------
    Reset demo data (footer link on every page)
 --------------------------------------------------------- */
 function initResetDemoButton() {
@@ -763,19 +826,37 @@ function initResetDemoButton() {
 }
 
 /* ---------------------------------------------------------
-   Shared: Edit / Remove / Book / Cancel Booking — one
-   delegated click handler for table rows, hostel cards, and
-   room cards alike
+   Shared: Edit / Remove / Book / Check In / Cancel Booking —
+   one delegated click handler for table rows, hostel cards,
+   and room cards alike
 --------------------------------------------------------- */
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
   const action = btn.dataset.action;
 
-  // Bookings page: cancel a booking (frees up the bed too)
+  // Bookings page: verify + check in a student
+  if (action === 'check-in') {
+    const row = btn.closest('tr[data-id]');
+    if (row && confirm("Confirm the student's batch number matches their ID, then check them in?")) {
+      checkInBooking(row.dataset.id);
+      renderCurrentPage();
+    }
+    return;
+  }
+
+  // Bookings page: cancel a booking (frees up the bed too).
+  // Blocked once a student has been checked in, to protect
+  // against a bed being freed while it's actually occupied.
   if (action === 'cancel-booking') {
     const row = btn.closest('tr[data-id]');
-    if (row && confirm('Cancel this booking and free up the bed?')) {
+    if (!row) return;
+    const booking = getBookings().find((b) => b.id === row.dataset.id);
+    if (booking && booking.checkedIn) {
+      alert('This student has already checked in — cancellation is disabled to protect the record.');
+      return;
+    }
+    if (confirm('Cancel this booking and free up the bed?')) {
       cancelBooking(row.dataset.id);
       renderCurrentPage();
     }
@@ -869,6 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initRoomSearchAndFilters();
   initAddRoomForm();
   initRecordBookingForm();
+  initBookingsFilters();
 
   renderCurrentPage();
 

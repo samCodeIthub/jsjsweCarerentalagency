@@ -150,13 +150,13 @@
                         <p class="stat-card__label">Total Bookings</p>
                         <p class="stat-card__value" id="statTotalBookings">0</p>
                     </article>
-                    <article class="stat-card stat-card--teal">
-                        <p class="stat-card__label">Confirmed</p>
-                        <p class="stat-card__value" id="statConfirmedBookings">0</p>
-                    </article>
                     <article class="stat-card stat-card--amber">
-                        <p class="stat-card__label">Cancelled</p>
-                        <p class="stat-card__value" id="statCancelledBookings">0</p>
+                        <p class="stat-card__label">Awaiting Check-in</p>
+                        <p class="stat-card__value" id="statAwaitingCheckIn">0</p>
+                    </article>
+                    <article class="stat-card stat-card--teal">
+                        <p class="stat-card__label">Checked In</p>
+                        <p class="stat-card__value" id="statCheckedIn">0</p>
                     </article>
                     <article class="stat-card stat-card--red">
                         <p class="stat-card__label">Revenue</p>
@@ -197,25 +197,35 @@
                                 <circle cx="11" cy="11" r="7" />
                                 <path d="M21 21l-4.3-4.3" />
                             </svg>
-                            <input type="search" placeholder="Search by student or hostel…"
+                            <input type="search" placeholder="Search by student, hostel, or batch no…"
                                 aria-label="Search bookings">
                         </label>
                     </div>
 
                     <p class="table__muted-note" style="margin-bottom: 16px;">
                         This log only includes bookings made through weCare — occupancy shown on the Rooms page may also
-                        include prior manually-tracked bookings.
+                        include prior manually-tracked bookings. Ask arriving students for their batch number to verify
+                        identity before check-in.
                     </p>
+
+                    <!-- Room-type filter chips -->
+                    <div class="filter-chips" id="bookingsFilterChips" role="group" aria-label="Filter by room type">
+                        <button class="chip is-active" type="button" data-filter="all">All Rooms</button>
+                        <button class="chip" type="button" data-filter="1">1 in a Room</button>
+                        <button class="chip" type="button" data-filter="2">2 in a Room</button>
+                        <button class="chip" type="button" data-filter="4">4 in a Room</button>
+                    </div>
 
                     <div class="table-scroll">
                         <table class="table">
                             <thead>
                                 <tr>
+                                    <th scope="col">Batch No.</th>
                                     <th scope="col">Student</th>
                                     <th scope="col">Hostel</th>
                                     <th scope="col">Room Type</th>
                                     <th scope="col">Price / Semester</th>
-                                    <th scope="col">Booked On</th>
+                                    <th scope="col">Date Paid</th>
                                     <th scope="col">Status</th>
                                     <th scope="col" class="table__actions-head">Actions</th>
                                 </tr>
