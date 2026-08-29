@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bookings · weCare Admin</title>
+    <title>Students · weCare Admin</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -56,7 +56,7 @@
                     </svg>
                     Rooms
                 </a>
-                <a class="nav__link is-active" href="bookings.html" aria-current="page">
+                <a class="nav__link" href="bookings.html">
                     <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
                         <rect x="3" y="5" width="18" height="16" rx="2" />
                         <path d="M3 10h18" />
@@ -65,7 +65,7 @@
                     </svg>
                     Bookings
                 </a>
-                <a class="nav__link" href="students.html">
+                <a class="nav__link is-active" href="students.html" aria-current="page">
                     <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="8" r="3.5" />
                         <path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" />
@@ -119,8 +119,8 @@
                 </button>
 
                 <div class="topbar__title">
-                    <h1>Bookings</h1>
-                    <p>See who's booked what and manage cancellations</p>
+                    <h1>Students</h1>
+                    <p>Every student who has booked, with contact info and check-in status</p>
                 </div>
 
                 <div class="topbar__actions">
@@ -141,97 +141,71 @@
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <a href="index.html">Dashboard</a>
                     <span aria-hidden="true">/</span>
-                    <span aria-current="page">Bookings</span>
+                    <span aria-current="page">Students</span>
                 </nav>
 
                 <!-- Stat cards -->
-                <section class="stats" aria-label="Booking overview">
+                <section class="stats" aria-label="Student overview">
                     <article class="stat-card stat-card--teal">
-                        <p class="stat-card__label">Total Bookings</p>
-                        <p class="stat-card__value" id="statTotalBookings">0</p>
-                    </article>
-                    <article class="stat-card stat-card--amber">
-                        <p class="stat-card__label">Awaiting Check-in</p>
-                        <p class="stat-card__value" id="statAwaitingCheckIn">0</p>
+                        <p class="stat-card__label">Total Students</p>
+                        <p class="stat-card__value" id="statTotalStudents">0</p>
                     </article>
                     <article class="stat-card stat-card--teal">
                         <p class="stat-card__label">Checked In</p>
-                        <p class="stat-card__value" id="statCheckedIn">0</p>
+                        <p class="stat-card__value" id="statStudentsCheckedIn">0</p>
+                    </article>
+                    <article class="stat-card stat-card--amber">
+                        <p class="stat-card__label">Awaiting Check-in</p>
+                        <p class="stat-card__value" id="statStudentsAwaiting">0</p>
                     </article>
                     <article class="stat-card stat-card--red">
-                        <p class="stat-card__label">Revenue</p>
-                        <p class="stat-card__value" id="statRevenue">GHS 0</p>
+                        <p class="stat-card__label">Cancelled</p>
+                        <p class="stat-card__value" id="statStudentsCancelled">0</p>
                     </article>
                 </section>
 
-                <!-- Record a booking panel -->
+                <!-- Students directory -->
                 <section class="panel">
                     <div class="panel__header">
-                        <h2>Record a Booking</h2>
-                    </div>
-
-                    <form class="form-grid" id="recordBookingForm">
-                        <div class="field">
-                            <label for="bookingRoom">Room</label>
-                            <select id="bookingRoom" name="bookingRoom">
-                                <!-- Options are populated by script.js from rooms with open beds -->
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="bookingStudent">Student name</label>
-                            <input type="text" id="bookingStudent" name="bookingStudent" placeholder="e.g. Ama Serwaa"
-                                required>
-                        </div>
-                        <div class="field field--action">
-                            <button class="btn btn--primary" type="submit">Book This Room</button>
-                        </div>
-                    </form>
-                </section>
-
-                <!-- Bookings table -->
-                <section class="panel">
-                    <div class="panel__header">
-                        <h2>All Bookings</h2>
+                        <h2>Student Directory</h2>
                         <label class="search">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <circle cx="11" cy="11" r="7" />
                                 <path d="M21 21l-4.3-4.3" />
                             </svg>
-                            <input type="search" placeholder="Search by student, hostel, or batch no…"
-                                aria-label="Search bookings">
+                            <input type="search" placeholder="Search by name, phone, or batch no…"
+                                aria-label="Search students">
                         </label>
                     </div>
 
                     <p class="table__muted-note" style="margin-bottom: 16px;">
-                        This log only includes bookings made through weCare — occupancy shown on the Rooms page may also
-                        include prior manually-tracked bookings. Ask arriving students for their batch number to verify
-                        identity before check-in.
+                        Students are created automatically from bookings. Add a phone number here so you can reach them,
+                        and verify their batch number at check-in.
                     </p>
 
-                    <!-- Room-type filter chips -->
-                    <div class="filter-chips" id="bookingsFilterChips" role="group" aria-label="Filter by room type">
-                        <button class="chip is-active" type="button" data-filter="all">All Rooms</button>
-                        <button class="chip" type="button" data-filter="1">1 in a Room</button>
-                        <button class="chip" type="button" data-filter="2">2 in a Room</button>
-                        <button class="chip" type="button" data-filter="4">4 in a Room</button>
+                    <!-- Status filter chips -->
+                    <div class="filter-chips" id="studentsFilterChips" role="group" aria-label="Filter by status">
+                        <button class="chip is-active" type="button" data-filter="all">All Students</button>
+                        <button class="chip" type="button" data-filter="checked-in">Checked In</button>
+                        <button class="chip" type="button" data-filter="awaiting">Awaiting Check-in</button>
+                        <button class="chip" type="button" data-filter="cancelled">Cancelled</button>
                     </div>
 
                     <div class="table-scroll">
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th scope="col">Batch No.</th>
                                     <th scope="col">Student</th>
+                                    <th scope="col">Phone</th>
                                     <th scope="col">Hostel</th>
                                     <th scope="col">Room Type</th>
-                                    <th scope="col">Price / Semester</th>
-                                    <th scope="col">Date Paid</th>
+                                    <th scope="col">Batch No.</th>
                                     <th scope="col">Status</th>
                                     <th scope="col" class="table__actions-head">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="bookingsBody">
-                                <!-- Rows are rendered by script.js from saved data -->
+                            <tbody id="studentsBody">
+                                <!-- Rows are rendered by script.js from saved bookings -->
                             </tbody>
                         </table>
                     </div>
