@@ -1,24 +1,30 @@
 // =========================================================
 // weCare Admin — script.js
-// localStorage-backed data layer: hostels, rooms, bookings
-// (with batch-number verification + check-in), and a student
-// directory derived from bookings. Shared across index.html /
-// hostels.html / rooms.html / bookings.html / students.html.
-// This is a trial/demo data layer — swap the storage functions
-// below for real API calls when you move to a backend.
+// localStorage-backed data layer: hostels (with per-hostel
+// commission settings), rooms, bookings (with batch-number
+// verification, check-in, and owner/company revenue split),
+// and a student directory derived from bookings. Shared across
+// index.html / hostels.html / rooms.html / bookings.html /
+// students.html. This is a trial/demo data layer — swap the
+// storage functions below for real API calls when you move to
+// a backend.
 // =========================================================
 
 const HOSTELS_KEY = 'wecare_hostels_v1';
 const ROOMS_KEY = 'wecare_rooms_v1';
 const BOOKINGS_KEY = 'wecare_bookings_v1';
 
+// Tracks which hostel (if any) the Add/Edit Hostel form is
+// currently editing. null means the form is in "add" mode.
+let editingHostelId = null;
+
 const DEFAULT_HOSTELS = [
-  { id: 'h1', name: 'Ambassador Hall', location: 'Near UEW South Campus', status: 'active' },
-  { id: 'h2', name: 'Unity Lodge', location: 'Jopps Junction, Winneba', status: 'active' },
-  { id: 'h3', name: 'Serene Villa', location: 'Behind UEW North Campus', status: 'active' },
-  { id: 'h4', name: 'Peace Hostel', location: 'Taffo Road, Winneba', status: 'active' },
-  { id: 'h5', name: 'Golden Gate Hall', location: 'Near UEW Main Gate', status: 'active' },
-  { id: 'h6', name: 'Mercy Lodge', location: 'Estate Junction, Winneba', status: 'draft' },
+  { id: 'h1', name: 'Ambassador Hall', location: 'Near UEW South Campus', status: 'active', commissionType: 'fixed', commissionValue: 200 },
+  { id: 'h2', name: 'Unity Lodge', location: 'Jopps Junction, Winneba', status: 'active', commissionType: 'fixed', commissionValue: 150 },
+  { id: 'h3', name: 'Serene Villa', location: 'Behind UEW North Campus', status: 'active', commissionType: 'percent', commissionValue: 8 },
+  { id: 'h4', name: 'Peace Hostel', location: 'Taffo Road, Winneba', status: 'active', commissionType: 'fixed', commissionValue: 100 },
+  { id: 'h5', name: 'Golden Gate Hall', location: 'Near UEW Main Gate', status: 'active', commissionType: 'percent', commissionValue: 10 },
+  { id: 'h6', name: 'Mercy Lodge', location: 'Estate Junction, Winneba', status: 'draft', commissionType: 'fixed', commissionValue: 0 },
 ];
 
 const DEFAULT_ROOMS = [
@@ -31,10 +37,10 @@ const DEFAULT_ROOMS = [
 ];
 
 const DEFAULT_BOOKINGS = [
-  { id: 'b1', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', capacity: '2', price: 1800, studentName: 'Kwame Owusu', phone: '024 555 1234', batchNumber: 'WC-7F3K9A', bookedAt: '2026-08-12', status: 'confirmed', checkedIn: true },
-  { id: 'b2', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', capacity: '2', price: 1800, studentName: 'Efua Mensah', phone: '', batchNumber: 'WC-2M8P4Q', bookedAt: '2026-08-14', status: 'confirmed', checkedIn: false },
-  { id: 'b3', roomId: 'r4', hostel: 'Peace Hostel', roomType: '2-in-a-Room', capacity: '2', price: 1500, studentName: 'Yaw Boateng', phone: '020 333 7890', batchNumber: 'WC-9R5T2H', bookedAt: '2026-08-15', status: 'confirmed', checkedIn: false },
-  { id: 'b4', roomId: 'r2', hostel: 'Unity Lodge', roomType: '4-in-a-Room', capacity: '4', price: 1050, studentName: 'Ama Serwaa', phone: '', batchNumber: 'WC-4X7N3B', bookedAt: '2026-08-10', status: 'cancelled', checkedIn: false },
+  { id: 'b1', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', capacity: '2', price: 1800, companyCut: 200, ownerPayout: 1600, studentName: 'Kwame Owusu', phone: '024 555 1234', batchNumber: 'WC-7F3K9A', bookedAt: '2026-08-12', status: 'confirmed', checkedIn: true },
+  { id: 'b2', roomId: 'r1', hostel: 'Ambassador Hall', roomType: '2-in-a-Room', capacity: '2', price: 1800, companyCut: 200, ownerPayout: 1600, studentName: 'Efua Mensah', phone: '', batchNumber: 'WC-2M8P4Q', bookedAt: '2026-08-14', status: 'confirmed', checkedIn: false },
+  { id: 'b3', roomId: 'r4', hostel: 'Peace Hostel', roomType: '2-in-a-Room', capacity: '2', price: 1500, companyCut: 100, ownerPayout: 1400, studentName: 'Yaw Boateng', phone: '020 333 7890', batchNumber: 'WC-9R5T2H', bookedAt: '2026-08-15', status: 'confirmed', checkedIn: false },
+  { id: 'b4', roomId: 'r2', hostel: 'Unity Lodge', roomType: '4-in-a-Room', capacity: '4', price: 1050, companyCut: 150, ownerPayout: 900, studentName: 'Ama Serwaa', phone: '', batchNumber: 'WC-4X7N3B', bookedAt: '2026-08-10', status: 'cancelled', checkedIn: false },
 ];
 
 /* ---------------------------------------------------------
@@ -90,6 +96,23 @@ function generateBatchNumber() {
   return `WC-${code}`;
 }
 
+// Splits a payment between the hostel owner and weCare, using
+// whatever commission rule is set on that hostel at the moment
+// of booking. The split is stored on the booking itself so it
+// stays accurate even if the hostel's rate changes later.
+function computeRevenueSplit(price, hostel) {
+  const type = hostel?.commissionType || 'fixed';
+  const value = Number(hostel?.commissionValue) || 0;
+
+  let companyCut = type === 'percent'
+    ? Math.round(price * (value / 100))
+    : value;
+
+  companyCut = Math.max(0, Math.min(companyCut, price)); // never negative, never more than the price
+  const ownerPayout = price - companyCut;
+  return { companyCut, ownerPayout };
+}
+
 function bookRoom(roomId, studentName) {
   const rooms = getRooms();
   const room = rooms.find((r) => r.id === roomId);
@@ -99,6 +122,10 @@ function bookRoom(roomId, studentName) {
   room.filled = Number(room.filled) + 1;
   setRooms(rooms);
 
+  const hostels = getHostels();
+  const hostelObj = hostels.find((h) => h.name === room.hostel);
+  const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj);
+
   const bookings = getBookings();
   bookings.unshift({
     id: makeId(),
@@ -107,6 +134,8 @@ function bookRoom(roomId, studentName) {
     roomType: room.capacity === '1' ? '1-in-a-Room' : `${room.capacity}-in-a-Room`,
     capacity: room.capacity,
     price: room.price,
+    companyCut,
+    ownerPayout,
     studentName,
     phone: '',
     batchNumber: generateBatchNumber(),
@@ -247,6 +276,7 @@ function renderHostelsPage() {
 
   const hostels = getHostels();
   const rooms = getRooms();
+  const bookings = getBookings();
 
   const activeListings = hostels.filter((h) => h.status === 'active').length;
   const draftListings = hostels.filter((h) => h.status === 'draft').length;
@@ -261,13 +291,31 @@ function renderHostelsPage() {
   setText('statFullyBooked', fullyBooked);
 
   grid.innerHTML = hostels.length
-    ? hostels.map((h) => hostelCardHtml(h, rooms)).join('')
+    ? hostels.map((h) => hostelCardHtml(h, rooms, bookings)).join('')
     : `<p class="empty-state">No hostels yet — add your first one above.</p>`;
 
   reapplyHostelSearch();
 }
 
-function hostelCardHtml(hostel, rooms) {
+// Sums a hostel's completed (non-cancelled) bookings into a
+// total, an owner payout, and weCare's cut.
+function hostelRevenue(hostelName, bookings) {
+  const relevant = bookings.filter((b) => b.hostel === hostelName && b.status !== 'cancelled');
+  return {
+    count: relevant.length,
+    total: relevant.reduce((s, b) => s + (Number(b.price) || 0), 0),
+    ownerPayout: relevant.reduce((s, b) => s + (Number(b.ownerPayout) || 0), 0),
+    companyCut: relevant.reduce((s, b) => s + (Number(b.companyCut) || 0), 0),
+  };
+}
+
+function commissionLabel(hostel) {
+  const type = hostel.commissionType || 'fixed';
+  const value = Number(hostel.commissionValue) || 0;
+  return type === 'percent' ? `${value}% / booking` : `GHS ${value.toLocaleString('en-US')} / booking`;
+}
+
+function hostelCardHtml(hostel, rooms, bookings) {
   const hRooms = roomsForHostel(hostel.name, rooms);
   const totalBeds = hRooms.reduce((sum, r) => sum + (Number(r.beds) || 0), 0);
   const fullyBooked = hRooms.length > 0 && hRooms.every((r) => roomStatus(r).key === 'full');
@@ -288,6 +336,21 @@ function hostelCardHtml(hostel, rooms) {
     statsText = `${totalBeds} beds · ${hRooms.length} room type${hRooms.length > 1 ? 's' : ''}`;
   }
 
+  const rev = hostelRevenue(hostel.name, bookings);
+  const revenueHtml = rev.count > 0
+    ? `
+      <div class="hostel-card__revenue">
+        <p class="hostel-card__revenue-row"><span>Commission</span><strong>${commissionLabel(hostel)}</strong></p>
+        <p class="hostel-card__revenue-row"><span>Total Revenue</span><strong>GHS ${rev.total.toLocaleString('en-US')}</strong></p>
+        <p class="hostel-card__revenue-row"><span>Owner Payout</span><strong>GHS ${rev.ownerPayout.toLocaleString('en-US')}</strong></p>
+        <p class="hostel-card__revenue-row"><span>weCare Cut</span><strong>GHS ${rev.companyCut.toLocaleString('en-US')}</strong></p>
+      </div>`
+    : `
+      <div class="hostel-card__revenue">
+        <p class="hostel-card__revenue-row"><span>Commission</span><strong>${commissionLabel(hostel)}</strong></p>
+        <p class="table__muted-note">No revenue yet</p>
+      </div>`;
+
   return `
     <article class="hostel-card" data-id="${hostel.id}">
       <div class="hostel-card__cover ${coverClass}">
@@ -298,6 +361,7 @@ function hostelCardHtml(hostel, rooms) {
         <h3>${escapeHtml(hostel.name)}</h3>
         <p class="hostel-card__meta">${escapeHtml(hostel.location)}</p>
         <p class="hostel-card__stats">${statsText}</p>
+        ${revenueHtml}
       </div>
       <div class="hostel-card__actions">
         <button class="link-btn" type="button" data-action="edit">Edit</button>
@@ -428,11 +492,15 @@ function renderBookingsPage() {
   const awaitingCheckIn = notCancelled.filter((b) => !b.checkedIn).length;
   const checkedIn = notCancelled.filter((b) => b.checkedIn).length;
   const revenue = notCancelled.reduce((s, b) => s + (Number(b.price) || 0), 0);
+  const ownerPayouts = notCancelled.reduce((s, b) => s + (Number(b.ownerPayout) || 0), 0);
+  const companyRevenue = notCancelled.reduce((s, b) => s + (Number(b.companyCut) || 0), 0);
 
   setText('statTotalBookings', bookings.length);
   setText('statAwaitingCheckIn', awaitingCheckIn);
   setText('statCheckedIn', checkedIn);
-  setText('statRevenue', `GHS ${revenue.toLocaleString('en-US')}`);
+  setText('statTotalCollected', `GHS ${revenue.toLocaleString('en-US')}`);
+  setText('statOwnerPayouts', `GHS ${ownerPayouts.toLocaleString('en-US')}`);
+  setText('statCompanyRevenue', `GHS ${companyRevenue.toLocaleString('en-US')}`);
 
   tbody.innerHTML = bookings.length
     ? bookings.map(bookingRowHtml).join('')
@@ -698,12 +766,21 @@ function initAddHostelForm() {
   const form = document.getElementById('addHostelForm');
   if (!form) return;
 
+  // Clicking Cancel (type="reset") — or any programmatic form.reset() —
+  // should also drop out of edit mode and restore the "Add" heading/button.
+  form.addEventListener('reset', () => {
+    stopEditingHostel();
+    resetFileDropLabel();
+  });
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
 
     const name = form.hostelName.value.trim();
     const location = form.hostelLocation.value.trim();
     const status = form.hostelStatus.value;
+    const commissionType = form.hostelCommissionType.value;
+    const commissionValue = Number(form.hostelCommissionValue.value) || 0;
 
     if (!name || !location) {
       flashInvalid(form.hostelName);
@@ -712,11 +789,36 @@ function initAddHostelForm() {
     }
 
     const hostels = getHostels();
-    hostels.unshift({ id: makeId(), name, location, status });
+
+    if (editingHostelId) {
+      const hostel = hostels.find((h) => h.id === editingHostelId);
+      if (hostel) {
+        hostel.name = name;
+        hostel.location = location;
+        hostel.status = status;
+        hostel.commissionType = commissionType;
+        hostel.commissionValue = commissionValue;
+      }
+      setHostels(hostels);
+
+      const editedId = editingHostelId;
+      form.reset(); // triggers the 'reset' listener above, which calls stopEditingHostel()
+      renderCurrentPage();
+
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`#hostelGrid .hostel-card[data-id="${editedId}"]`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          flashCardSuccess(card);
+        }
+      });
+      return;
+    }
+
+    hostels.unshift({ id: makeId(), name, location, status, commissionType, commissionValue });
     setHostels(hostels);
 
     form.reset();
-    resetFileDropLabel();
     renderCurrentPage();
 
     requestAnimationFrame(() => {
@@ -727,6 +829,59 @@ function initAddHostelForm() {
       }
     });
   });
+}
+
+// Switches the Add/Edit Hostel form into "edit" mode and
+// pre-fills it with the selected hostel's current values.
+function startEditingHostel(hostelId) {
+  const hostel = getHostels().find((h) => h.id === hostelId);
+  const form = document.getElementById('addHostelForm');
+  const panel = document.getElementById('add-hostel');
+  if (!hostel || !form || !panel) return;
+
+  editingHostelId = hostelId;
+
+  form.hostelName.value = hostel.name;
+  form.hostelLocation.value = hostel.location;
+  form.hostelStatus.value = hostel.status;
+  form.hostelCommissionType.value = hostel.commissionType || 'fixed';
+  form.hostelCommissionValue.value = hostel.commissionValue || 0;
+  form.hostelCommissionType.dispatchEvent(new Event('change')); // updates the GHS/% prefix
+  if (form.hostelRooms) form.hostelRooms.value = '';
+  if (form.hostelDescription) form.hostelDescription.value = '';
+  resetFileDropLabel();
+
+  const titleEl = document.getElementById('hostelFormTitle');
+  if (titleEl) titleEl.textContent = 'Edit Hostel';
+  const submitBtn = document.getElementById('hostelSubmitBtn');
+  if (submitBtn) submitBtn.textContent = 'Save Changes';
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  form.hostelName.focus();
+}
+
+// Restores the form to "add a new hostel" mode.
+function stopEditingHostel() {
+  editingHostelId = null;
+  const titleEl = document.getElementById('hostelFormTitle');
+  if (titleEl) titleEl.textContent = 'Add New Hostel';
+  const submitBtn = document.getElementById('hostelSubmitBtn');
+  if (submitBtn) submitBtn.textContent = 'Save Hostel';
+}
+
+/* ---------------------------------------------------------
+   Hostels page — toggle GHS/% prefix on the commission field
+--------------------------------------------------------- */
+function initCommissionTypeToggle() {
+  const typeSelect = document.getElementById('hostelCommissionType');
+  const prefix = document.getElementById('commissionPrefix');
+  if (!typeSelect || !prefix) return;
+
+  const updatePrefix = () => {
+    prefix.textContent = typeSelect.value === 'percent' ? '%' : 'GHS';
+  };
+  typeSelect.addEventListener('change', updatePrefix);
+  updatePrefix();
 }
 
 /* ---------------------------------------------------------
@@ -1003,12 +1158,20 @@ document.addEventListener('click', (e) => {
     }
     if (doRemove && confirm(confirmText)) {
       doRemove();
+      if (hostelCard && id === editingHostelId) {
+        const form = document.getElementById('addHostelForm');
+        if (form) form.reset(); // also calls stopEditingHostel() via the 'reset' listener
+      }
       renderCurrentPage();
     }
     return;
   }
 
   if (action === 'edit') {
+    if (hostelCard) {
+      startEditingHostel(id);
+      return;
+    }
     const name = container.querySelector('h3')?.textContent
       || container.children[0]?.textContent
       || 'this item';
@@ -1064,6 +1227,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initQuickAddForm();
   initAddHostelForm();
+  initCommissionTypeToggle();
   initRoomSearchAndFilters();
   initAddRoomForm();
   initRecordBookingForm();

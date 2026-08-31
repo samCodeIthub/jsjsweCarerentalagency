@@ -145,7 +145,7 @@
                 </nav>
 
                 <!-- Stat cards -->
-                <section class="stats" aria-label="Booking overview">
+                <section class="stats stats--split" aria-label="Booking overview">
                     <article class="stat-card stat-card--teal">
                         <p class="stat-card__label">Total Bookings</p>
                         <p class="stat-card__value" id="statTotalBookings">0</p>
@@ -158,9 +158,21 @@
                         <p class="stat-card__label">Checked In</p>
                         <p class="stat-card__value" id="statCheckedIn">0</p>
                     </article>
+                </section>
+                    
+                <!-- Revenue split summary -->
+                <section class="stats stats--split" aria-label="Revenue split">
+                    <article class="stat-card stat-card--teal">
+                        <p class="stat-card__label">Total Collected</p>
+                        <p class="stat-card__value" id="statTotalCollected">GHS 0</p>
+                    </article>
+                    <article class="stat-card stat-card--teal">
+                        <p class="stat-card__label">Owner Payouts</p>
+                        <p class="stat-card__value" id="statOwnerPayouts">GHS 0</p>
+                    </article>
                     <article class="stat-card stat-card--red">
-                        <p class="stat-card__label">Revenue</p>
-                        <p class="stat-card__value" id="statRevenue">GHS 0</p>
+                        <p class="stat-card__label">weCare Revenue</p>
+                        <p class="stat-card__value" id="statCompanyRevenue">GHS 0</p>
                     </article>
                 </section>
 
