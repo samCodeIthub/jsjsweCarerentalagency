@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log In · weCare</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="client-styles.css">
+    <script type="module" src="firebase-config.js"></script>
+</head>
+
+<body class="client-auth-body">
+
+    <div class="client-auth">
+        <div class="client-auth__brand">
+            <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true">
+                <path
+                    d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z"
+                    fill="currentColor" />
+                <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C" />
+                <circle cx="108" cy="128" r="4.5" fill="#FF7A59" />
+            </svg>
+            <span class="brand__name">we<b>Care</b></span>
+        </div>
+
+        <div class="client-auth__card">
+            <div class="client-auth__tabs" role="tablist">
+                <button class="client-auth__tab is-active" id="tabLogin" type="button" role="tab"
+                    aria-selected="true">Log In</button>
+                <button class="client-auth__tab" id="tabRegister" type="button" role="tab"
+                    aria-selected="false">Register</button>
+            </div>
+
+            <!-- LOGIN FORM -->
+            <form id="loginForm" class="client-auth__form">
+                <p class="client-auth__error" id="loginError"></p>
+                <div class="field">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" required placeholder="you@example.com">
+                </div>
+                <div class="field">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required placeholder="••••••••">
+                </div>
+                <button class="btn btn--primary btn--block" type="submit">Log In</button>
+            </form>
+
+            <!-- REGISTER FORM (students only) -->
+            <form id="registerForm" class="client-auth__form" hidden>
+                <p class="client-auth__error" id="registerError"></p>
+                <div class="field">
+                    <label for="regName">Full name</label>
+                    <input type="text" id="regName" required placeholder="e.g. Ama Serwaa">
+                </div>
+                <div class="field">
+                    <label for="regEmail">Email</label>
+                    <input type="email" id="regEmail" required placeholder="you@example.com">
+                </div>
+                <div class="field">
+                    <label for="regPhone">Phone number</label>
+                    <input type="tel" id="regPhone" required placeholder="e.g. 024 555 1234">
+                </div>
+                <div class="field">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" required minlength="6" placeholder="At least 6 characters">
+                </div>
+                <div class="field">
+                    <label for="regConfirm">Confirm password</label>
+                    <input type="password" id="regConfirm" required minlength="6" placeholder="Re-enter password">
+                </div>
+                <button class="btn btn--primary btn--block" type="submit">Create Account</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="login.js"></script>
+</body>
+
+</html>

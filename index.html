@@ -11,6 +11,7 @@
     href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script type="module" src="firebase-config.js"></script>
 </head>
 
 <body>
@@ -91,7 +92,7 @@
       </nav>
 
       <div class="sidebar__footer">
-        <a class="nav__link" href="#">
+        <a class="nav__link" href="#" id="logoutBtn">
           <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <path d="M16 17l5-5-5-5" />
@@ -242,6 +243,14 @@
   </div>
 
   <script src="script.js"></script>
+  <script type="module">
+    import { requireAdmin, logoutUser } from './auth-guard.js';
+    requireAdmin();
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logoutUser();
+    });
+  </script>
 </body>
 
 </html>

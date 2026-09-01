@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>weCare · Find Your Hostel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="client-styles.css">
+    <script type="module" src="firebase-config.js"></script>
+</head>
+
+<body class="client-body">
+
+    <header class="client-header">
+        <div class="client-header__brand">
+            <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true">
+                <path
+                    d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z"
+                    fill="currentColor" />
+                <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C" />
+                <circle cx="108" cy="128" r="4.5" fill="#FF7A59" />
+            </svg>
+            <span class="brand__name">we<b>Care</b></span>
+        </div>
+        <nav class="client-header__nav">
+            <a href="#browse" class="client-header__link is-active">Browse Hostels</a>
+            <a href="#my-bookings" class="client-header__link">My Bookings</a>
+        </nav>
+        <div class="client-header__user">
+            <span id="welcomeName">Hi there</span>
+            <button class="btn btn--ghost" id="logoutBtn" type="button">Log Out</button>
+        </div>
+    </header>
+
+    <main class="client-main">
+    
+        <section class="client-hero">
+            <div>
+                <p class="client-hero__eyebrow">Semester bookings <span>·</span> open now</p>
+                <h1>Get your bed locked in before rooms run out.</h1>
+                <p>Browse verified hostels near campus, compare prices by room type, and book instantly — you'll get a batch
+                    number the moment it's confirmed.</p>
+                <label class="search search--wide">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M21 21l-4.3-4.3" />
+                    </svg>
+                    <input type="search" id="hostelSearch" placeholder="Search hostels by name or location…">
+                </label>
+            </div>
+    
+            <div class="client-hero__ticket-wrap">
+                <div class="ticket">
+                    <div class="ticket__row-top">
+                        <div>
+                            <p class="ticket__label">HOSTEL</p>
+                            <p class="ticket__hostel">Ambassador Hall</p>
+                        </div>
+                        <span class="ticket__badge">CONFIRMED</span>
+                    </div>
+                    <div class="ticket__divider"></div>
+                    <p class="ticket__label">BATCH NO.</p>
+                    <p class="ticket__code">WC-4X9K2P</p>
+                    <div class="ticket__meta">
+                        <span>2 in a Room</span>
+                        <span>GHS 1,800</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    
+        <section id="browse" class="client-section">
+            <div class="client-section__head">
+                <h2>Available hostels</h2>
+            </div>
+            <div class="hostel-grid" id="clientHostelGrid">
+                <!-- rendered by client.js -->
+            </div>
+        </section>
+    
+        <section id="my-bookings" class="client-section">
+            <div class="client-section__head">
+                <h2>My bookings</h2>
+            </div>
+            <div class="booking-tickets" id="myBookingsList">
+                <!-- rendered by client.js -->
+            </div>
+        </section>
+    
+    </main>
+    <!-- Room picker modal for a selected hostel -->
+    <div class="client-modal" id="roomModal" style="display: none;">
+        <div class="client-modal__box">
+            <button class="client-modal__close" id="closeModalBtn" type="button" aria-label="Close">&times;</button>
+            <h2 id="modalHostelName">Hostel</h2>
+            <p id="modalHostelLocation" class="client-modal__location"></p>
+            <div id="modalRoomList" class="client-modal__rooms"></div>
+        </div>
+    </div>
+
+    <footer class="page-footer">
+        <p>weCare Rental Agency · Student Portal</p>
+    </footer>
+
+    <script src="client.js"></script>
+    <script type="module">
+        import { requireClient, logoutUser } from './auth-guard.js';
+        import { initClientPortal } from './client.js';
+
+        requireClient();
+        initClientPortal();
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            logoutUser();
+        });
+
+        document.getElementById('hostelSearch').addEventListener('input', (e) => {
+            renderHostelGrid(e.target.value);
+        });
+
+        document.getElementById('closeModalBtn').addEventListener('click', closeRoomModal);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,642 @@
+/* =========================================================
+   weCare Client Portal — styles
+   Design concept: the "batch ticket" motif — since every
+   booking already produces a real ticket-like batch code,
+   the whole page borrows that shape instead of generic cards.
+   ========================================================= */
+
+.client-auth-body,
+.client-body {
+    background: var(--bg);
+    min-height: 100vh;
+}
+
+/* ---------- Auth page (unchanged from before) ---------- */
+.client-auth {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px;
+}
+
+.client-auth__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.client-auth__brand .brand__mark {
+    width: 32px;
+    height: 34px;
+    color: var(--teal);
+}
+
+.client-auth__brand .brand__name {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+}
+
+.client-auth__brand .brand__name b {
+    font-weight: 700;
+    color: var(--teal-darkest);
+}
+
+.client-auth__card {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-pop);
+    padding: 28px;
+    width: 100%;
+    max-width: 380px;
+}
+
+.client-auth__tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.client-auth__tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: var(--teal-pale);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    color: var(--ink-soft);
+}
+
+.client-auth__tab.is-active {
+    background: var(--teal);
+    color: #fff;
+}
+
+.client-auth__form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.client-auth__form[hidden] {
+    display: none !important;
+}
+
+.client-auth__error {
+    display: none;
+    background: var(--red-pale);
+    color: var(--red-text);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+}
+
+.btn--block {
+    width: 100%;
+    justify-content: center;
+}
+
+/* ---------- Header ---------- */
+.client-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 32px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+
+.client-header__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.client-header__brand .brand__mark {
+    width: 26px;
+    height: 28px;
+    color: var(--teal);
+}
+
+.client-header__brand .brand__name {
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.15rem;
+}
+
+.client-header__brand .brand__name b {
+    color: var(--teal-darkest);
+    font-weight: 700;
+}
+
+.client-header__nav {
+    display: flex;
+    gap: 24px;
+}
+
+.client-header__link {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink-soft);
+}
+
+.client-header__link.is-active {
+    color: var(--teal-darkest);
+}
+
+.client-header__user {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* ---------- Hero: asymmetric, ticket illustration ---------- */
+.client-hero {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: clamp(32px, 6vw, 72px) 24px;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 48px;
+    align-items: center;
+}
+
+.client-hero__eyebrow {
+    color: var(--teal-darkest);
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.client-hero__eyebrow span {
+    color: var(--coral, #FF7A59);
+}
+
+.client-hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(32px, 5vw, 52px);
+    line-height: 1.08;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+}
+
+.client-hero p {
+    color: var(--ink-soft);
+    font-size: 17px;
+    line-height: 1.5;
+    max-width: 42ch;
+    margin-bottom: 28px;
+}
+
+.search--wide {
+    max-width: 460px;
+}
+
+.client-hero__ticket-wrap {
+    display: flex;
+    justify-content: center;
+    animation: ticket-settle 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ticket-settle {
+    from {
+        opacity: 0;
+        transform: translateY(18px) rotate(-3deg);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) rotate(-3deg);
+    }
+}
+
+.ticket {
+    width: 280px;
+    background: var(--teal-darkest);
+    border-radius: 18px;
+    padding: 24px 22px;
+    color: #fff;
+    position: relative;
+    box-shadow: var(--shadow-pop);
+    transform: rotate(-3deg);
+}
+
+.ticket::before,
+.ticket::after {
+    content: "";
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: var(--bg);
+    border-radius: 50%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ticket::before {
+    left: -12px;
+}
+
+.ticket::after {
+    right: -12px;
+}
+
+.ticket__row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 22px;
+}
+
+.ticket__label {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--teal-light);
+}
+
+.ticket__hostel {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 18px;
+    margin-top: 4px;
+}
+
+.ticket__badge {
+    background: var(--coral, #FF7A59);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+
+.ticket__divider {
+    border-top: 2px dashed rgba(255, 255, 255, 0.25);
+    margin: 18px 0;
+}
+
+.ticket__code {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 0.06em;
+}
+
+.ticket__meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--teal-light);
+}
+
+/* ---------- Sections ---------- */
+.client-main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px 64px;
+}
+
+.client-section {
+    margin-bottom: 56px;
+}
+
+.client-section__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.client-section__head h2 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    color: var(--ink);
+}
+
+.client-section__count {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+/* ---------- Hostel cards: color-block corner instead of photo ---------- */
+.hostel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+}
+
+.hostel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hostel-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-pop);
+}
+
+.hostel-card__block {
+    height: 96px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-darkest));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 30px;
+    letter-spacing: 0.02em;
+}
+
+.hostel-card__body {
+    padding: 18px 18px 4px;
+    flex: 1;
+}
+
+.hostel-card__body h3 {
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--ink);
+    margin-bottom: 4px;
+}
+
+.hostel-card__location {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.hostel-card__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+}
+
+.pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.pill--available {
+    background: var(--teal-pale);
+    color: var(--teal-darkest);
+}
+
+.pill--full {
+    background: var(--red-pale);
+    color: var(--red-text);
+}
+
+.pill--warning {
+    background: var(--amber-pale);
+    color: var(--amber-text);
+}
+
+.hostel-card>.btn {
+    margin: 0 18px 18px;
+}
+
+/* ---------- My Bookings: ticket-stub cards, not a table ---------- */
+.booking-tickets {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.booking-ticket {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    position: relative;
+}
+
+.booking-ticket::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--coral, #FF7A59);
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.booking-ticket__main h3 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 2px;
+}
+
+.booking-ticket__main p {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.booking-ticket__code {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--teal-darkest);
+    margin-top: 6px;
+}
+
+.booking-ticket__right {
+    text-align: right;
+}
+
+.booking-ticket__price {
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 6px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    background: var(--teal-pale);
+    border-radius: var(--radius-lg);
+}
+
+/* ---------- Modal (unchanged behavior, refined look) ---------- */
+.client-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(31, 41, 55, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 50;
+}
+
+.client-modal[hidden] {
+    display: none !important;
+}
+
+.client-modal__box {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.client-modal__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    border: none;
+    background: none;
+    font-size: 24px;
+    line-height: 1;
+    color: var(--muted);
+}
+
+.client-modal__location {
+    color: var(--muted);
+    margin-bottom: 16px;
+}
+
+.client-modal__rooms {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.client-modal__room {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.client-modal__room-type {
+    font-weight: 600;
+}
+
+.client-modal__room-price {
+    color: var(--teal-darkest);
+    font-weight: 600;
+}
+
+.client-modal__room-open {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* =========================================================
+   Responsive — mobile first breakpoints
+   ========================================================= */
+@media (max-width: 900px) {
+    .client-hero {
+        grid-template-columns: 1fr;
+        text-align: center;
+        gap: 32px;
+    }
+
+    .client-hero p {
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .search--wide {
+        margin: 0 auto;
+    }
+
+    .client-hero__ticket-wrap {
+        order: -1;
+    }
+}
+
+@media (max-width: 640px) {
+    .client-header {
+        padding: 14px 16px;
+        flex-wrap: wrap;
+    }
+
+    .client-header__nav {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+        margin-top: 10px;
+    }
+
+    .client-main {
+        padding: 0 16px 48px;
+    }
+
+    .client-hero {
+        padding: 32px 16px;
+    }
+
+    .ticket {
+        width: 100%;
+        max-width: 280px;
+    }
+
+    .hostel-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .booking-ticket {
+        grid-template-columns: 1fr;
+        text-align: left;
+    }
+
+    .booking-ticket__right {
+        text-align: left;
+    }
+
+    .client-modal__box {
+        padding: 20px;
+    }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+    .hostel-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
