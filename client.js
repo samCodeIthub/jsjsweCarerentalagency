@@ -23,11 +23,13 @@ const BOOKINGS_COLLECTION = 'bookings';
 let hostelsCache = [];
 let roomsCache = [];
 let bookingsCache = [];
+let paymentSettingsCache = { momoNetwork: 'MTN Mobile Money', momoNumber: '', momoName: '' };
 const cachesReady = { hostels: false, rooms: false, bookings: false };
 
 function getHostels() { return hostelsCache; }
 function getRooms() { return roomsCache; }
 function getBookings() { return bookingsCache; }
+function getPaymentSettings() { return paymentSettingsCache; }
 
 function makeId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -114,7 +116,10 @@ async function clientBookRoom(roomId) {
     phone: client.phone,
     batchNumber: generateBatchNumber(),
     bookedAt: new Date().toISOString().slice(0, 10),
-    status: 'confirmed',
+    // The bed is reserved right away so nobody else can take it
+    // while the admin verifies the Mobile Money payment — but the
+    // booking only becomes real once they confirm it on their end.
+    status: 'pending',
     checkedIn: false,
   };
 
@@ -152,10 +157,13 @@ function renderHostelGrid(filterText) {
       ? Math.min(...hostelRooms.map((r) => Number(r.price) || Infinity))
       : null;
     const initial = h.name.trim().charAt(0).toUpperCase();
+    const blockInner = h.photoURL
+      ? `<img src="${escapeHtml(h.photoURL)}" alt="${escapeHtml(h.name)}" class="hostel-card__photo">`
+      : escapeHtml(initial);
 
     return `
       <article class="hostel-card" data-id="${escapeHtml(h.id)}">
-        <div class="hostel-card__block">${escapeHtml(initial)}</div>
+        <div class="hostel-card__block">${blockInner}</div>
         <div class="hostel-card__body">
           <h3>${escapeHtml(h.name)}</h3>
           <p class="hostel-card__location">${escapeHtml(h.location)}</p>
@@ -210,24 +218,69 @@ function openRoomModal(hostelId) {
     }).join('');
 
     list.querySelectorAll('[data-book-room]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Confirm you want to book this room? This reserves your bed and generates your batch number.')) return;
-        btn.disabled = true;
-        btn.textContent = 'Booking…';
-        const result = await clientBookRoom(btn.dataset.bookRoom);
-        if (!result.ok) {
-          alert(result.message);
-          btn.disabled = false;
-          btn.textContent = 'Book this room';
-          return;
-        }
-        alert(`Booked! Your batch number is ${result.booking.batchNumber}. Save this — you'll need it at check-in.`);
-        closeRoomModal();
+      btn.addEventListener('click', () => {
+        const room = rooms.find((r) => r.id === btn.dataset.bookRoom);
+        if (room) renderPaymentStep(hostel, room);
       });
     });
   }
 
   document.getElementById('roomModal').style.display = 'flex';
+}
+
+/* ---------------------------------------------------------
+   Payment step — shown inside the room modal after a student
+   picks a room. Nothing is booked yet; the bed is only reserved
+   once they say they've sent the money, and the admin still has
+   to confirm the payment before it counts as a real booking.
+--------------------------------------------------------- */
+function renderPaymentStep(hostel, room) {
+  const list = document.getElementById('modalRoomList');
+  if (!list) return;
+
+  const settings = getPaymentSettings();
+  const label = room.capacity === '1' ? '1 student / room' : `${room.capacity} students / room`;
+  const hasNumber = Boolean(settings.momoNumber);
+
+  list.innerHTML = `
+    <div class="payment-step">
+      <p class="payment-step__room">${escapeHtml(label)} — ${escapeHtml(hostel.name)}</p>
+      <p class="payment-step__price">GHS ${Number(room.price).toLocaleString()} / semester</p>
+      <div class="payment-step__momo">
+        <p class="ticket__label">SEND MOBILE MONEY TO</p>
+        <p class="payment-step__number">${hasNumber ? escapeHtml(settings.momoNumber) : 'Contact the admin for a number'}</p>
+        ${hasNumber ? `<p class="payment-step__name">${escapeHtml(settings.momoName || '')}${settings.momoName && settings.momoNetwork ? ' · ' : ''}${escapeHtml(settings.momoNetwork || '')}</p>` : ''}
+      </div>
+      <p class="table__muted-note">Send the exact amount above, then tap the button below. We'll verify the payment and confirm your bed — you'll see it update under "My Bookings".</p>
+      <button class="btn btn--primary btn--block" type="button" id="confirmSentBtn" ${hasNumber ? '' : 'disabled'}>I've Sent the Payment</button>
+      <button class="btn btn--ghost btn--block" type="button" id="backToRoomsBtn">Back</button>
+    </div>
+  `;
+
+  document.getElementById('backToRoomsBtn').addEventListener('click', () => openRoomModal(hostel.id));
+
+  const sendBtn = document.getElementById('confirmSentBtn');
+  if (!sendBtn) return;
+  sendBtn.addEventListener('click', async () => {
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Processing…';
+    const result = await clientBookRoom(room.id);
+    if (!result.ok) {
+      alert(result.message);
+      sendBtn.disabled = false;
+      sendBtn.textContent = "I've Sent the Payment";
+      return;
+    }
+    list.innerHTML = `
+      <div class="payment-step">
+        <p class="payment-step__processing">Processing your payment&hellip;</p>
+        <p class="table__muted-note">Your batch number is <strong>${escapeHtml(result.booking.batchNumber)}</strong> — save this.
+          Once we confirm your payment, this will show as "Awaiting Check-in" under My Bookings.</p>
+        <button class="btn btn--primary btn--block" type="button" id="paymentDoneBtn">Done</button>
+      </div>
+    `;
+    document.getElementById('paymentDoneBtn').addEventListener('click', closeRoomModal);
+  });
 }
 
 function closeRoomModal() {
@@ -260,9 +313,11 @@ function renderMyBookings() {
         <p class="booking-ticket__price">GHS ${Number(b.price).toLocaleString()}</p>
         ${b.status === 'cancelled'
           ? '<span class="pill pill--full">Cancelled</span>'
-          : b.checkedIn
-            ? '<span class="pill pill--available">Checked in</span>'
-            : '<span class="pill pill--warning">Awaiting check-in</span>'}
+          : b.status === 'pending'
+            ? '<span class="pill pill--warning">Processing Payment</span>'
+            : b.checkedIn
+              ? '<span class="pill pill--available">Checked in</span>'
+              : '<span class="pill pill--warning">Awaiting check-in</span>'}
       </div>
     </div>
   `).join('');
@@ -295,6 +350,9 @@ function startLiveSync() {
     bookingsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     cachesReady.bookings = true;
     maybeRender();
+  });
+  onSnapshot(doc(db, 'settings', 'payment'), (snap) => {
+    if (snap.exists()) paymentSettingsCache = { ...paymentSettingsCache, ...snap.data() };
   });
 }
 

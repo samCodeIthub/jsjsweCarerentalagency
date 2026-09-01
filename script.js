@@ -15,12 +15,20 @@
 
 import { db } from './firebase-config.js';
 import {
-  collection, doc, getDocs, writeBatch, onSnapshot,
+  collection, doc, getDoc, setDoc, getDocs, writeBatch, onSnapshot,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+const META_COLLECTION = 'meta';
+const SEED_STATUS_DOC = 'seedStatus';
+import {
+  ref, uploadBytes, getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-storage.js";
 
 const HOSTELS_COLLECTION = 'hostels';
 const ROOMS_COLLECTION = 'rooms';
 const BOOKINGS_COLLECTION = 'bookings';
+const SETTINGS_COLLECTION = 'settings';
+const PAYMENT_SETTINGS_DOC = 'payment';
 
 // Tracks which hostel (if any) the Add/Edit Hostel form is
 // currently editing. null means the form is in "add" mode.
@@ -58,11 +66,13 @@ const DEFAULT_BOOKINGS = [
 let hostelsCache = [];
 let roomsCache = [];
 let bookingsCache = [];
+let paymentSettingsCache = { momoNetwork: 'MTN Mobile Money', momoNumber: '', momoName: '' };
 const cachesReady = { hostels: false, rooms: false, bookings: false };
 
 function getHostels() { return hostelsCache; }
 function getRooms() { return roomsCache; }
 function getBookings() { return bookingsCache; }
+function getPaymentSettings() { return paymentSettingsCache; }
 
 function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -86,17 +96,22 @@ function setHostels(list) { hostelsCache = list; saveCollection(HOSTELS_COLLECTI
 function setRooms(list) { roomsCache = list; saveCollection(ROOMS_COLLECTION, list); }
 function setBookings(list) { bookingsCache = list; saveCollection(BOOKINGS_COLLECTION, list); }
 
-// Seeds demo data ONLY if the shared database is completely
-// empty (first time ever, for anyone).
+// Seeds demo data ONLY the very first time this database is
+// ever used — tracked with a one-time flag, not by checking
+// whether collections are currently empty. This means clearing
+// your real data later will NOT trigger it to come back.
 async function seedDataIfEmpty() {
-  const hostelsSnap = await getDocs(collection(db, HOSTELS_COLLECTION));
-  if (hostelsSnap.empty) await saveCollection(HOSTELS_COLLECTION, DEFAULT_HOSTELS);
+  const seedRef = doc(db, META_COLLECTION, SEED_STATUS_DOC);
+  const seedSnap = await getDoc(seedRef);
 
-  const roomsSnap = await getDocs(collection(db, ROOMS_COLLECTION));
-  if (roomsSnap.empty) await saveCollection(ROOMS_COLLECTION, DEFAULT_ROOMS);
+  if (seedSnap.exists() && seedSnap.data().seeded) {
+    return; // already seeded once, ever — leave real/cleared data alone
+  }
 
-  const bookingsSnap = await getDocs(collection(db, BOOKINGS_COLLECTION));
-  if (bookingsSnap.empty) await saveCollection(BOOKINGS_COLLECTION, DEFAULT_BOOKINGS);
+  await saveCollection(HOSTELS_COLLECTION, DEFAULT_HOSTELS);
+  await saveCollection(ROOMS_COLLECTION, DEFAULT_ROOMS);
+  await saveCollection(BOOKINGS_COLLECTION, DEFAULT_BOOKINGS);
+  await setDoc(seedRef, { seeded: true, seededAt: new Date().toISOString() });
 }
 
 function resetDemoData() {
@@ -125,6 +140,10 @@ function startLiveSync() {
     bookingsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     cachesReady.bookings = true;
     maybeRender();
+  });
+  onSnapshot(doc(db, SETTINGS_COLLECTION, PAYMENT_SETTINGS_DOC), (snap) => {
+    if (snap.exists()) paymentSettingsCache = { ...paymentSettingsCache, ...snap.data() };
+    renderPaymentSettingsForm();
   });
 }
 
@@ -216,10 +235,63 @@ function cancelBooking(bookingId) {
 function checkInBooking(bookingId) {
   const bookings = getBookings();
   const booking = bookings.find((b) => b.id === bookingId);
+  if (!booking || booking.status !== 'confirmed' || booking.checkedIn) return;
+
+  booking.checkedIn = true;
+  setBookings(bookings);
+}
+
+function checkInBooking(bookingId) {
+  const bookings = getBookings();
+  const booking = bookings.find((b) => b.id === bookingId);
   if (!booking || booking.status === 'cancelled' || booking.checkedIn) return;
 
   booking.checkedIn = true;
   setBookings(bookings);
+}
+
+// Undoes a check-in — for when someone was checked in by mistake.
+// Not allowed on cancelled bookings, and a no-op if not checked in.
+function undoCheckIn(bookingId) {
+  const bookings = getBookings();
+  const booking = bookings.find((b) => b.id === bookingId);
+  if (!booking || booking.status === 'cancelled' || !booking.checkedIn) return;
+
+  booking.checkedIn = false;
+  setBookings(bookings);
+}
+
+// Admin has checked their Mobile Money and actually received the
+// payment for this booking — this is the moment the room is
+// really booked. Bed count doesn't change here since it was
+// already reserved the moment the student said they'd paid.
+function confirmBookingPayment(bookingId) {
+  const bookings = getBookings();
+  const booking = bookings.find((b) => b.id === bookingId);
+  if (!booking || booking.status !== 'pending') return;
+
+  booking.status = 'confirmed';
+  setBookings(bookings);
+}
+
+// Permanently removes a booking from the database. Only ever
+// called on bookings that are already cancelled — this is for
+// clearing old cancelled records off the list, not for cancelling
+// an active one (use cancelBooking for that).
+async function deleteBookingPermanently(bookingId) {
+  bookingsCache = bookingsCache.filter((b) => b.id !== bookingId);
+  await deleteDoc(doc(db, BOOKINGS_COLLECTION, bookingId));
+}
+
+// Uploads a hostel's chosen photo file to Firebase Storage and
+// returns a public download URL to save on the hostel's record.
+// No admin has to touch any code for this — they just pick a
+// file in the form and it's stored automatically.
+async function uploadHostelPhoto(hostelId, file) {
+  const path = `hostel-photos/${hostelId}-${Date.now()}-${file.name}`;
+  const fileRef = ref(storage, path);
+  await uploadBytes(fileRef, file);
+  return getDownloadURL(fileRef);
 }
 
 /* ---------------------------------------------------------
@@ -397,11 +469,15 @@ function hostelCardHtml(hostel, rooms, bookings) {
         <p class="table__muted-note">No revenue yet</p>
       </div>`;
 
+  const coverInner = hostel.photoURL
+    ? `<img src="${escapeHtml(hostel.photoURL)}" alt="${escapeHtml(hostel.name)}" class="hostel-card__photo">`
+    : `<svg class="hostel-card__photo-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-4 3"/></svg>`;
+
   return `
     <article class="hostel-card" data-id="${hostel.id}">
-      <div class="hostel-card__cover ${coverClass}">
+      <div class="hostel-card__cover ${hostel.photoURL ? '' : coverClass}">
         <span class="pill ${pillClass}">${label}</span>
-        <svg class="hostel-card__photo-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-4 3"/></svg>
+        ${coverInner}
       </div>
       <div class="hostel-card__body">
         <h3>${escapeHtml(hostel.name)}</h3>
@@ -512,6 +588,42 @@ function reapplyRoomFilterAndSearch() {
 }
 
 /* ---------------------------------------------------------
+   Payment Settings — the Mobile Money number/name students see
+--------------------------------------------------------- */
+function renderPaymentSettingsForm() {
+  const form = document.getElementById('paymentSettingsForm');
+  if (!form) return; // not on this page
+
+  const settings = getPaymentSettings();
+  // Don't stomp on what the admin is actively typing.
+  if (document.activeElement && form.contains(document.activeElement)) return;
+
+  if (form.momoNetwork) form.momoNetwork.value = settings.momoNetwork || 'MTN Mobile Money';
+  if (form.momoNumber) form.momoNumber.value = settings.momoNumber || '';
+  if (form.momoName) form.momoName.value = settings.momoName || '';
+}
+
+function initPaymentSettingsForm() {
+  const form = document.getElementById('paymentSettingsForm');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const momoNetwork = form.momoNetwork.value;
+    const momoNumber = form.momoNumber.value.trim();
+    const momoName = form.momoName.value.trim();
+
+    const btn = form.querySelector('button[type="submit"]');
+    const original = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    await setDoc(doc(db, SETTINGS_COLLECTION, PAYMENT_SETTINGS_DOC), { momoNetwork, momoNumber, momoName }, { merge: true });
+
+    if (btn) { btn.disabled = false; btn.textContent = original; }
+  });
+}
+
+/* ---------------------------------------------------------
    Render: Bookings page (bookings.html)
 --------------------------------------------------------- */
 function renderBookingsPage() {
@@ -534,19 +646,31 @@ function renderBookingsPage() {
     if (available.some((r) => r.id === prev)) roomSelect.value = prev;
   }
 
-  const notCancelled = bookings.filter((b) => b.status !== 'cancelled');
-  const awaitingCheckIn = notCancelled.filter((b) => !b.checkedIn).length;
-  const checkedIn = notCancelled.filter((b) => b.checkedIn).length;
-  const revenue = notCancelled.reduce((s, b) => s + (Number(b.price) || 0), 0);
-  const ownerPayouts = notCancelled.reduce((s, b) => s + (Number(b.ownerPayout) || 0), 0);
-  const companyRevenue = notCancelled.reduce((s, b) => s + (Number(b.companyCut) || 0), 0);
+  const pending = bookings.filter((b) => b.status === 'pending');
+  const confirmed = bookings.filter((b) => b.status === 'confirmed');
+  const awaitingCheckIn = confirmed.filter((b) => !b.checkedIn).length;
+  const checkedIn = confirmed.filter((b) => b.checkedIn).length;
+  const revenue = confirmed.reduce((s, b) => s + (Number(b.price) || 0), 0);
+  const ownerPayouts = confirmed.reduce((s, b) => s + (Number(b.ownerPayout) || 0), 0);
+  const companyRevenue = confirmed.reduce((s, b) => s + (Number(b.companyCut) || 0), 0);
 
-  setText('statTotalBookings', bookings.length);
+  // "Total Bookings" is every live booking (pending + confirmed) —
+  // cancelled ones don't count towards it since they're not real
+  // bookings any more. Money collected only counts once confirmed.
+  setText('statPendingPayment', pending.length);
+  setText('statTotalBookings', pending.length + confirmed.length);
   setText('statAwaitingCheckIn', awaitingCheckIn);
   setText('statCheckedIn', checkedIn);
   setText('statTotalCollected', `GHS ${revenue.toLocaleString('en-US')}`);
   setText('statOwnerPayouts', `GHS ${ownerPayouts.toLocaleString('en-US')}`);
   setText('statCompanyRevenue', `GHS ${companyRevenue.toLocaleString('en-US')}`);
+
+  const pendingBody = document.getElementById('pendingPaymentsBody');
+  if (pendingBody) {
+    pendingBody.innerHTML = pending.length
+      ? pending.map(pendingBookingRowHtml).join('')
+      : `<tr><td colspan="7" class="empty-state">No pending payments — you're all caught up.</td></tr>`;
+  }
 
   tbody.innerHTML = bookings.length
     ? bookings.map(bookingRowHtml).join('')
@@ -555,13 +679,31 @@ function renderBookingsPage() {
   reapplyBookingsSearch();
 }
 
+function pendingBookingRowHtml(booking) {
+  return `
+    <tr data-id="${booking.id}">
+      <td data-label="Batch No."><span class="batch-code">${escapeHtml(booking.batchNumber)}</span></td>
+      <td data-label="Student">${escapeHtml(booking.studentName)}</td>
+      <td data-label="Hostel">${escapeHtml(booking.hostel)}</td>
+      <td data-label="Room Type">${escapeHtml(booking.roomType)}</td>
+      <td data-label="Amount Due">GHS ${Number(booking.price).toLocaleString('en-US')}</td>
+      <td data-label="Requested">${escapeHtml(booking.bookedAt)}</td>
+      <td data-label="Actions" class="table__actions">
+        <button class="link-btn" type="button" data-action="confirm-payment">Confirm Payment</button>
+        <button class="link-btn link-btn--danger" type="button" data-action="reject-payment">Reject</button>
+      </td>
+    </tr>`;
+}
+
 function bookingRowHtml(booking) {
   const isCancelled = booking.status === 'cancelled';
-  const isCheckedIn = !isCancelled && booking.checkedIn;
+  const isPending = booking.status === 'pending';
+  const isCheckedIn = !isCancelled && !isPending && booking.checkedIn;
 
   let pillClass = 'pill--warning';
   let label = 'Awaiting Check-in';
   if (isCancelled) { pillClass = 'pill--draft'; label = 'Cancelled'; }
+  else if (isPending) { pillClass = 'pill--warning'; label = 'Processing Payment'; }
   else if (isCheckedIn) { pillClass = 'pill--available'; label = 'Checked In'; }
 
   const batchHtml = isCancelled
@@ -569,12 +711,18 @@ function bookingRowHtml(booking) {
     : `<span class="batch-code">${escapeHtml(booking.batchNumber)}</span>`;
 
   let actionsHtml = `<span class="table__muted-note">—</span>`;
-  if (!isCancelled && !isCheckedIn) {
+  if (isPending) {
+    actionsHtml = `
+      <button class="link-btn" type="button" data-action="confirm-payment">Confirm Payment</button>
+      <button class="link-btn link-btn--danger" type="button" data-action="reject-payment">Reject</button>`;
+  } else if (!isCancelled && !isCheckedIn) {
     actionsHtml = `
       <button class="link-btn" type="button" data-action="check-in">Check In</button>
       <button class="link-btn link-btn--danger" type="button" data-action="cancel-booking">Cancel</button>`;
-  } else if (isCheckedIn) {
-    actionsHtml = `<span class="table__muted-note">Checked In &#10003;</span>`;
+    } else if (isCheckedIn) {
+    actionsHtml = `<button class="link-btn" type="button" data-action="undo-check-in">Undo Check-in</button>`;
+  } else if (isCancelled) {
+    actionsHtml = `<button class="link-btn link-btn--danger" type="button" data-action="delete-booking">Delete</button>`;
   }
 
   return `
@@ -618,11 +766,12 @@ function renderStudentsPage() {
   const bookings = getBookings();
 
   const cancelled = bookings.filter((b) => b.status === 'cancelled').length;
-  const notCancelled = bookings.filter((b) => b.status !== 'cancelled');
-  const checkedIn = notCancelled.filter((b) => b.checkedIn).length;
-  const awaiting = notCancelled.filter((b) => !b.checkedIn).length;
+  const pending = bookings.filter((b) => b.status === 'pending').length;
+  const confirmed = bookings.filter((b) => b.status === 'confirmed');
+  const checkedIn = confirmed.filter((b) => b.checkedIn).length;
+  const awaiting = confirmed.filter((b) => !b.checkedIn).length;
 
-  setText('statTotalStudents', bookings.length);
+  setText('statTotalStudents', pending + confirmed.length);
   setText('statStudentsCheckedIn', checkedIn);
   setText('statStudentsAwaiting', awaiting);
   setText('statStudentsCancelled', cancelled);
@@ -636,12 +785,14 @@ function renderStudentsPage() {
 
 function studentRowHtml(booking) {
   const isCancelled = booking.status === 'cancelled';
-  const isCheckedIn = !isCancelled && booking.checkedIn;
+  const isPending = booking.status === 'pending';
+  const isCheckedIn = !isCancelled && !isPending && booking.checkedIn;
 
   let statusKey = 'awaiting';
   let pillClass = 'pill--warning';
   let label = 'Awaiting Check-in';
   if (isCancelled) { statusKey = 'cancelled'; pillClass = 'pill--draft'; label = 'Cancelled'; }
+  else if (isPending) { statusKey = 'pending'; pillClass = 'pill--warning'; label = 'Processing Payment'; }
   else if (isCheckedIn) { statusKey = 'checked-in'; pillClass = 'pill--available'; label = 'Checked In'; }
 
   const batchHtml = isCancelled
@@ -651,12 +802,16 @@ function studentRowHtml(booking) {
   const phoneText = booking.phone ? escapeHtml(booking.phone) : `<span class="table__muted-note">Not added</span>`;
 
   let statusActionsHtml = `<span class="table__muted-note">—</span>`;
-  if (!isCancelled && !isCheckedIn) {
+  if (isPending) {
+    statusActionsHtml = `<span class="table__muted-note">Verify on Bookings page</span>`;
+  } else if (!isCancelled && !isCheckedIn) {
     statusActionsHtml = `
       <button class="link-btn" type="button" data-action="check-in">Check In</button>
       <button class="link-btn link-btn--danger" type="button" data-action="cancel-booking">Cancel</button>`;
-  } else if (isCheckedIn) {
-    statusActionsHtml = `<span class="table__muted-note">Checked In &#10003;</span>`;
+    } else if (isCheckedIn) {
+    statusActionsHtml = `<button class="link-btn" type="button" data-action="undo-check-in">Undo Check-in</button>`;
+  } else if (isCancelled) {
+    statusActionsHtml = `<button class="link-btn link-btn--danger" type="button" data-action="delete-booking">Delete</button>`;
   }
 
   return `
@@ -819,7 +974,7 @@ function initAddHostelForm() {
     resetFileDropLabel();
   });
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const name = form.hostelName.value.trim();
@@ -827,11 +982,19 @@ function initAddHostelForm() {
     const status = form.hostelStatus.value;
     const commissionType = form.hostelCommissionType.value;
     const commissionValue = Number(form.hostelCommissionValue.value) || 0;
+    const photoFile = form.hostelPhoto?.files?.[0] || null;
 
     if (!name || !location) {
       flashInvalid(form.hostelName);
       flashInvalid(form.hostelLocation);
       return;
+    }
+
+    const submitBtn = document.getElementById('hostelSubmitBtn');
+    const originalBtnText = submitBtn ? submitBtn.textContent : '';
+    if (photoFile && submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading photo…';
     }
 
     const hostels = getHostels();
@@ -844,10 +1007,13 @@ function initAddHostelForm() {
         hostel.status = status;
         hostel.commissionType = commissionType;
         hostel.commissionValue = commissionValue;
+        // Keep the existing photo unless a new one was chosen.
+        if (photoFile) hostel.photoURL = await uploadHostelPhoto(hostel.id, photoFile);
       }
       setHostels(hostels);
 
       const editedId = editingHostelId;
+      if (submitBtn) submitBtn.disabled = false;
       form.reset(); // triggers the 'reset' listener above, which calls stopEditingHostel()
       renderCurrentPage();
 
@@ -861,9 +1027,12 @@ function initAddHostelForm() {
       return;
     }
 
-    hostels.unshift({ id: makeId(), name, location, status, commissionType, commissionValue });
+    const newId = makeId();
+    const photoURL = photoFile ? await uploadHostelPhoto(newId, photoFile) : '';
+    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, photoURL });
     setHostels(hostels);
 
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
     form.reset();
     renderCurrentPage();
 
@@ -895,7 +1064,12 @@ function startEditingHostel(hostelId) {
   form.hostelCommissionType.dispatchEvent(new Event('change')); // updates the GHS/% prefix
   if (form.hostelRooms) form.hostelRooms.value = '';
   if (form.hostelDescription) form.hostelDescription.value = '';
-  resetFileDropLabel();
+  if (hostel.photoURL) {
+    const textEl = document.querySelector('.file-drop span');
+    if (textEl) textEl.innerHTML = 'Current photo on file — <b>click to replace</b>';
+  } else {
+    resetFileDropLabel();
+  }
 
   const titleEl = document.getElementById('hostelFormTitle');
   if (titleEl) titleEl.textContent = 'Edit Hostel';
@@ -1136,11 +1310,59 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   const action = btn.dataset.action;
 
+  // Pending Payments (and Bookings page): admin has checked their
+  // Mobile Money and actually received the payment — this is what
+  // really books the room for the student.
+  if (action === 'confirm-payment') {
+    const row = btn.closest('tr[data-id]');
+    if (row && confirm("Confirm you've received this payment on Mobile Money? This books the room for the student.")) {
+      confirmBookingPayment(row.dataset.id);
+      renderCurrentPage();
+    }
+    return;
+  }
+
+  // Pending Payments (and Bookings page): payment never came
+  // through — free up the bed and mark it cancelled.
+  if (action === 'reject-payment') {
+    const row = btn.closest('tr[data-id]');
+    if (row && confirm('Reject this booking? This frees up the bed — only do this if the payment never arrived.')) {
+      cancelBooking(row.dataset.id);
+      renderCurrentPage();
+    }
+    return;
+  }
+
   // Bookings page: verify + check in a student
   if (action === 'check-in') {
     const row = btn.closest('tr[data-id]');
     if (row && confirm("Confirm the student's batch number matches their ID, then check them in?")) {
       checkInBooking(row.dataset.id);
+      renderCurrentPage();
+    }
+    return;
+  }
+
+    // Undo a check-in made by mistake
+  if (action === 'undo-check-in') {
+    const row = btn.closest('tr[data-id]');
+    if (row && confirm('Undo this check-in? The student will show as "Awaiting Check-in" again.')) {
+      undoCheckIn(row.dataset.id);
+      renderCurrentPage();
+    }
+    return;
+  }
+
+  // Bookings/Students page: permanently remove a cancelled
+  // booking from the list (it's already void — this just clears
+  // it off the screen). Never available on an active booking.
+  if (action === 'delete-booking') {
+    const row = btn.closest('tr[data-id]');
+    if (!row) return;
+    const booking = getBookings().find((b) => b.id === row.dataset.id);
+    if (!booking || booking.status !== 'cancelled') return;
+    if (confirm('Permanently delete this cancelled booking? This cannot be undone.')) {
+      deleteBookingPermanently(row.dataset.id);
       renderCurrentPage();
     }
     return;
@@ -1275,6 +1497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initRoomSearchAndFilters();
   initAddRoomForm();
   initRecordBookingForm();
+  initPaymentSettingsForm();
   initBookingsFilters();
   initStudentsFilters();
 

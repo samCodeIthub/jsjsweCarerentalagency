@@ -777,6 +777,20 @@ svg {
   margin-left: auto;
 }
 
+.hostel-card__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.hostel-card__cover .pill {
+  position: relative;
+  z-index: 1;
+}
+
 .hostel-card__body {
   padding: 16px 16px 4px;
   flex: 1;

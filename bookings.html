@@ -147,6 +147,10 @@
 
                 <!-- Stat cards -->
                 <section class="stats stats--split" aria-label="Booking overview">
+                    <article class="stat-card stat-card--red">
+                        <p class="stat-card__label">Pending Payment</p>
+                        <p class="stat-card__value" id="statPendingPayment">0</p>
+                    </article>
                     <article class="stat-card stat-card--teal">
                         <p class="stat-card__label">Total Bookings</p>
                         <p class="stat-card__value" id="statTotalBookings">0</p>
@@ -177,11 +181,75 @@
                     </article>
                 </section>
 
+                <!-- Payment settings panel -->
+                <section class="panel">
+                    <div class="panel__header">
+                        <h2>Mobile Money Settings</h2>
+                    </div>
+                    <p class="table__muted-note" style="margin-bottom: 16px;">
+                        This is the number students are shown when they book online. Update it any time — no code needed.
+                    </p>
+                    <form class="form-grid" id="paymentSettingsForm">
+                        <div class="field">
+                            <label for="momoNetwork">Network</label>
+                            <select id="momoNetwork" name="momoNetwork">
+                                <option value="MTN Mobile Money">MTN Mobile Money</option>
+                                <option value="Telecel Cash">Telecel Cash</option>
+                                <option value="AirtelTigo Money">AirtelTigo Money</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="momoNumber">Mobile Money Number</label>
+                            <input type="tel" id="momoNumber" name="momoNumber" placeholder="e.g. 024 555 1234">
+                        </div>
+                        <div class="field">
+                            <label for="momoName">Registered Name</label>
+                            <input type="text" id="momoName" name="momoName" placeholder="e.g. weCare Rental Agency">
+                        </div>
+                        <div class="field field--action">
+                            <button class="btn btn--primary" type="submit">Save</button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Pending payments panel -->
+                <section class="panel">
+                    <div class="panel__header">
+                        <h2>Pending Payments</h2>
+                    </div>
+                    <p class="table__muted-note" style="margin-bottom: 16px;">
+                        Students who booked online land here first. Check your Mobile Money for their payment, then confirm
+                        or reject — confirming is what actually books the room.
+                    </p>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Batch No.</th>
+                                    <th scope="col">Student</th>
+                                    <th scope="col">Hostel</th>
+                                    <th scope="col">Room Type</th>
+                                    <th scope="col">Amount Due</th>
+                                    <th scope="col">Requested</th>
+                                    <th scope="col" class="table__actions-head">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingPaymentsBody">
+                                <!-- Rows are rendered by script.js from saved data -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
                 <!-- Record a booking panel -->
                 <section class="panel">
                     <div class="panel__header">
                         <h2>Record a Booking</h2>
                     </div>
+                    <p class="table__muted-note" style="margin-bottom: 16px;">
+                        Use this only for bookings paid directly to you in person or by cash — it books the room
+                        immediately. Online bookings go through Pending Payments above instead.
+                    </p>
 
                     <form class="form-grid" id="recordBookingForm">
                         <div class="field">

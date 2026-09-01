@@ -368,6 +368,13 @@
     font-weight: 700;
     font-size: 30px;
     letter-spacing: 0.02em;
+    overflow: hidden;
+}
+
+.hostel-card__photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .hostel-card__body {
@@ -563,6 +570,56 @@
 .client-modal__room-open {
     color: var(--muted);
     font-size: 13px;
+}
+
+/* ---------- Payment step (inside the room modal) ---------- */
+.payment-step {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.payment-step__room {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.payment-step__price {
+    color: var(--teal-darkest);
+    font-weight: 700;
+    margin-top: -8px;
+}
+
+.payment-step__momo {
+    background: var(--teal-darkest);
+    color: #fff;
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+}
+
+.payment-step__momo .ticket__label {
+    color: var(--teal-light);
+}
+
+.payment-step__number {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 0.04em;
+    margin-top: 4px;
+}
+
+.payment-step__name {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--teal-light);
+}
+
+.payment-step__processing {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--teal-darkest);
 }
 
 /* =========================================================
