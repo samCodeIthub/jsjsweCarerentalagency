@@ -1,18 +1,26 @@
 // =========================================================
 // weCare Admin — script.js
-// localStorage-backed data layer: hostels (with per-hostel
+// Firestore-backed data layer: hostels (with per-hostel
 // commission settings), rooms, bookings (with batch-number
 // verification, check-in, and owner/company revenue split),
 // and a student directory derived from bookings. Shared across
 // index.html / hostels.html / rooms.html / bookings.html /
-// students.html. This is a trial/demo data layer — swap the
-// storage functions below for real API calls when you move to
-// a backend.
+// students.html.
+//
+// getHostels()/getRooms()/getBookings() still return data
+// instantly and synchronously — a live cache behind the
+// scenes is kept in sync with Firestore, so none of the
+// rendering/business logic below needed to change.
 // =========================================================
 
-const HOSTELS_KEY = 'wecare_hostels_v1';
-const ROOMS_KEY = 'wecare_rooms_v1';
-const BOOKINGS_KEY = 'wecare_bookings_v1';
+import { db } from './firebase-config.js';
+import {
+  collection, doc, getDocs, writeBatch, onSnapshot,
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+const HOSTELS_COLLECTION = 'hostels';
+const ROOMS_COLLECTION = 'rooms';
+const BOOKINGS_COLLECTION = 'bookings';
 
 // Tracks which hostel (if any) the Add/Edit Hostel form is
 // currently editing. null means the form is in "add" mode.
@@ -44,42 +52,80 @@ const DEFAULT_BOOKINGS = [
 ];
 
 /* ---------------------------------------------------------
-   Storage helpers — swap these for real API calls later
+   Live cache — kept in sync by Firestore listeners (see
+   startLiveSync near the bottom of this file).
 --------------------------------------------------------- */
-function getHostels() {
-  try { return JSON.parse(localStorage.getItem(HOSTELS_KEY)) || []; }
-  catch { return []; }
-}
-function setHostels(list) { localStorage.setItem(HOSTELS_KEY, JSON.stringify(list)); }
+let hostelsCache = [];
+let roomsCache = [];
+let bookingsCache = [];
+const cachesReady = { hostels: false, rooms: false, bookings: false };
 
-function getRooms() {
-  try { return JSON.parse(localStorage.getItem(ROOMS_KEY)) || []; }
-  catch { return []; }
-}
-function setRooms(list) { localStorage.setItem(ROOMS_KEY, JSON.stringify(list)); }
-
-function getBookings() {
-  try { return JSON.parse(localStorage.getItem(BOOKINGS_KEY)) || []; }
-  catch { return []; }
-}
-function setBookings(list) { localStorage.setItem(BOOKINGS_KEY, JSON.stringify(list)); }
+function getHostels() { return hostelsCache; }
+function getRooms() { return roomsCache; }
+function getBookings() { return bookingsCache; }
 
 function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-function seedDataIfEmpty() {
-  if (localStorage.getItem(HOSTELS_KEY) === null) setHostels(DEFAULT_HOSTELS);
-  if (localStorage.getItem(ROOMS_KEY) === null) setRooms(DEFAULT_ROOMS);
-  if (localStorage.getItem(BOOKINGS_KEY) === null) setBookings(DEFAULT_BOOKINGS);
+// Saves a FULL list back to Firestore — deletes what's there
+// and rewrites it, matching how setHostels/etc always worked.
+async function saveCollection(name, list) {
+  const colRef = collection(db, name);
+  const existingSnap = await getDocs(colRef);
+  const batch = writeBatch(db);
+  existingSnap.forEach((docSnap) => batch.delete(docSnap.ref));
+  list.forEach((item) => {
+    const { id, ...data } = item;
+    batch.set(doc(db, name, id || makeId()), data);
+  });
+  await batch.commit();
+}
+
+function setHostels(list) { hostelsCache = list; saveCollection(HOSTELS_COLLECTION, list); }
+function setRooms(list) { roomsCache = list; saveCollection(ROOMS_COLLECTION, list); }
+function setBookings(list) { bookingsCache = list; saveCollection(BOOKINGS_COLLECTION, list); }
+
+// Seeds demo data ONLY if the shared database is completely
+// empty (first time ever, for anyone).
+async function seedDataIfEmpty() {
+  const hostelsSnap = await getDocs(collection(db, HOSTELS_COLLECTION));
+  if (hostelsSnap.empty) await saveCollection(HOSTELS_COLLECTION, DEFAULT_HOSTELS);
+
+  const roomsSnap = await getDocs(collection(db, ROOMS_COLLECTION));
+  if (roomsSnap.empty) await saveCollection(ROOMS_COLLECTION, DEFAULT_ROOMS);
+
+  const bookingsSnap = await getDocs(collection(db, BOOKINGS_COLLECTION));
+  if (bookingsSnap.empty) await saveCollection(BOOKINGS_COLLECTION, DEFAULT_BOOKINGS);
 }
 
 function resetDemoData() {
-  localStorage.removeItem(HOSTELS_KEY);
-  localStorage.removeItem(ROOMS_KEY);
-  localStorage.removeItem(BOOKINGS_KEY);
-  seedDataIfEmpty();
-  renderCurrentPage();
+  saveCollection(HOSTELS_COLLECTION, DEFAULT_HOSTELS);
+  saveCollection(ROOMS_COLLECTION, DEFAULT_ROOMS);
+  saveCollection(BOOKINGS_COLLECTION, DEFAULT_BOOKINGS);
+}
+
+// Keeps the cache (and the screen) live-updated — including
+// when a change happens on a DIFFERENT browser or device.
+function startLiveSync() {
+  function maybeRender() {
+    if (cachesReady.hostels && cachesReady.rooms && cachesReady.bookings) renderCurrentPage();
+  }
+  onSnapshot(collection(db, HOSTELS_COLLECTION), (snap) => {
+    hostelsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    cachesReady.hostels = true;
+    maybeRender();
+  });
+  onSnapshot(collection(db, ROOMS_COLLECTION), (snap) => {
+    roomsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    cachesReady.rooms = true;
+    maybeRender();
+  });
+  onSnapshot(collection(db, BOOKINGS_COLLECTION), (snap) => {
+    bookingsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    cachesReady.bookings = true;
+    maybeRender();
+  });
 }
 
 /* ---------------------------------------------------------
@@ -1074,7 +1120,7 @@ function initResetDemoButton() {
   if (!btn) return;
 
   btn.addEventListener('click', () => {
-    if (confirm('Reset all hostels, rooms, and bookings back to the demo starting data?')) {
+    if (confirm('Reset all hostels, rooms, and bookings back to the demo starting data? This affects EVERYONE using the live site.')) {
       resetDemoData();
     }
   });
@@ -1218,9 +1264,7 @@ function flashCardSuccess(card) {
 /* ---------------------------------------------------------
    Boot
 --------------------------------------------------------- */
-document.addEventListener('DOMContentLoaded', () => {
-  seedDataIfEmpty();
-
+document.addEventListener('DOMContentLoaded', async () => {
   initSidebar();
   initFileDrop();
   initResetDemoButton();
@@ -1234,7 +1278,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initBookingsFilters();
   initStudentsFilters();
 
-  renderCurrentPage();
+  await seedDataIfEmpty();
+  startLiveSync();
 
   // Search inputs on Dashboard / Hostels / Bookings / Students pages
   // (Rooms page search is wired inside initRoomSearchAndFilters since

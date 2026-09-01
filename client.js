@@ -1,31 +1,51 @@
 // =========================================================
 // weCare Client Portal — client.js
-// Hostels/rooms/bookings still read/write localStorage for
-// now (Firestore migration is a separate step) — but client
-// IDENTITY now comes from Firebase Auth + Firestore, since
-// login/registration moved there.
+// Hostels/rooms/bookings now read/write Firestore, matching
+// the admin's script.js — so anything added by the admin (or
+// booked by any student) shows up everywhere, instantly.
 // =========================================================
 
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import {
+  doc, getDoc, collection, onSnapshot,
+  writeBatch, getDocs,
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
-const HOSTELS_KEY = 'wecare_hostels_v1';
-const ROOMS_KEY = 'wecare_rooms_v1';
-const BOOKINGS_KEY = 'wecare_bookings_v1';
+const HOSTELS_COLLECTION = 'hostels';
+const ROOMS_COLLECTION = 'rooms';
+const BOOKINGS_COLLECTION = 'bookings';
 
 /* ---------------------------------------------------------
-   Storage helpers (mirrors admin script.js) — hostels, rooms,
-   and bookings are still on localStorage until the Firestore
-   data migration step.
+   Live cache — kept in sync by Firestore listeners, same
+   pattern as the admin's script.js.
 --------------------------------------------------------- */
-function getHostels() { try { return JSON.parse(localStorage.getItem(HOSTELS_KEY)) || []; } catch { return []; } }
-function getRooms() { try { return JSON.parse(localStorage.getItem(ROOMS_KEY)) || []; } catch { return []; } }
-function setRooms(list) { localStorage.setItem(ROOMS_KEY, JSON.stringify(list)); }
-function getBookings() { try { return JSON.parse(localStorage.getItem(BOOKINGS_KEY)) || []; } catch { return []; } }
-function setBookings(list) { localStorage.setItem(BOOKINGS_KEY, JSON.stringify(list)); }
+let hostelsCache = [];
+let roomsCache = [];
+let bookingsCache = [];
+const cachesReady = { hostels: false, rooms: false, bookings: false };
+
+function getHostels() { return hostelsCache; }
+function getRooms() { return roomsCache; }
+function getBookings() { return bookingsCache; }
 
 function makeId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// Saves ONE room's updated fields back to Firestore (used when
+// a booking fills a bed) without touching any other room.
+async function updateRoomDoc(roomId, changes) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, ROOMS_COLLECTION, roomId), changes, { merge: true });
+  await batch.commit();
+}
+
+// Adds ONE new booking document to Firestore.
+async function addBookingDoc(booking) {
+  const { id, ...data } = booking;
+  const batch = writeBatch(db);
+  batch.set(doc(db, BOOKINGS_COLLECTION, id), data);
+  await batch.commit();
+}
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (m) => ({
@@ -34,15 +54,10 @@ function escapeHtml(str) {
 }
 
 /* ---------------------------------------------------------
-   Client identity — now sourced from Firebase Auth + the
-   "users" Firestore collection (role/fullName/phone etc.),
-   populated once on page load and cached here.
+   Client identity — from Firebase Auth + the "users" collection
 --------------------------------------------------------- */
 let currentClientProfile = null;
-
-function getCurrentClient() {
-  return currentClientProfile;
-}
+function getCurrentClient() { return currentClientProfile; }
 
 async function loadCurrentClientProfile(user) {
   const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -74,22 +89,17 @@ function computeRevenueSplit(price, hostel) {
   return { companyCut, ownerPayout: price - companyCut };
 }
 
-function clientBookRoom(roomId) {
+async function clientBookRoom(roomId) {
   const client = getCurrentClient();
   if (!client) return { ok: false, message: 'You need to be logged in to book.' };
 
-  const rooms = getRooms();
-  const room = rooms.find((r) => r.id === roomId);
+  const room = getRooms().find((r) => r.id === roomId);
   if (!room) return { ok: false, message: 'That room type no longer exists.' };
   if (Number(room.filled) >= Number(room.beds)) return { ok: false, message: 'This room type just filled up.' };
-
-  room.filled = Number(room.filled) + 1;
-  setRooms(rooms);
 
   const hostelObj = getHostels().find((h) => h.name === room.hostel);
   const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj);
 
-  const bookings = getBookings();
   const booking = {
     id: makeId(),
     roomId: room.id,
@@ -107,8 +117,10 @@ function clientBookRoom(roomId) {
     status: 'confirmed',
     checkedIn: false,
   };
-  bookings.unshift(booking);
-  setBookings(bookings);
+
+  await updateRoomDoc(room.id, { filled: Number(room.filled) + 1 });
+  await addBookingDoc(booking);
+
   return { ok: true, booking };
 }
 
@@ -198,17 +210,19 @@ function openRoomModal(hostelId) {
     }).join('');
 
     list.querySelectorAll('[data-book-room]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         if (!confirm('Confirm you want to book this room? This reserves your bed and generates your batch number.')) return;
-        const result = clientBookRoom(btn.dataset.bookRoom);
+        btn.disabled = true;
+        btn.textContent = 'Booking…';
+        const result = await clientBookRoom(btn.dataset.bookRoom);
         if (!result.ok) {
           alert(result.message);
+          btn.disabled = false;
+          btn.textContent = 'Book this room';
           return;
         }
         alert(`Booked! Your batch number is ${result.booking.batchNumber}. Save this — you'll need it at check-in.`);
         closeRoomModal();
-        renderHostelGrid('');
-        renderMyBookings();
       });
     });
   }
@@ -255,8 +269,37 @@ function renderMyBookings() {
 }
 
 /* ---------------------------------------------------------
-   Boot the portal — waits for Firebase to confirm who's
-   logged in, loads their profile, THEN renders the page.
+   Live sync — mirrors the admin's script.js pattern
+--------------------------------------------------------- */
+function startLiveSync() {
+  const searchInput = document.getElementById('hostelSearch');
+  function currentSearch() { return searchInput ? searchInput.value : ''; }
+
+  function maybeRender() {
+    if (!cachesReady.hostels || !cachesReady.rooms || !cachesReady.bookings) return;
+    renderHostelGrid(currentSearch());
+    renderMyBookings();
+  }
+
+  onSnapshot(collection(db, HOSTELS_COLLECTION), (snap) => {
+    hostelsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    cachesReady.hostels = true;
+    maybeRender();
+  });
+  onSnapshot(collection(db, ROOMS_COLLECTION), (snap) => {
+    roomsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    cachesReady.rooms = true;
+    maybeRender();
+  });
+  onSnapshot(collection(db, BOOKINGS_COLLECTION), (snap) => {
+    bookingsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    cachesReady.bookings = true;
+    maybeRender();
+  });
+}
+
+/* ---------------------------------------------------------
+   Boot the portal
 --------------------------------------------------------- */
 export function initClientPortal() {
   onAuthStateChanged(auth, async (user) => {
@@ -268,11 +311,9 @@ export function initClientPortal() {
       welcome.textContent = `Hi, ${currentClientProfile.fullName.split(' ')[0]}`;
     }
 
-    renderHostelGrid('');
-    renderMyBookings();
+    startLiveSync();
   });
 }
 
-// Expose the functions the inline script on client-portal.html needs
 window.renderHostelGrid = renderHostelGrid;
 window.closeRoomModal = closeRoomModal;
