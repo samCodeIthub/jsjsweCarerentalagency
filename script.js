@@ -120,7 +120,7 @@ function resetDemoData() {
   saveCollection(BOOKINGS_COLLECTION, DEFAULT_BOOKINGS);
 }
 
-// Keeps the cache (and the screen) live-updated — including
+// Keeps the acache (and the screen) live-updated — including
 // when a change happens on a DIFFERENT browser or device.
 function startLiveSync() {
   function maybeRender() {
@@ -926,59 +926,39 @@ function initQuickAddForm() {
   const form = document.getElementById('quickAddForm');
   if (!form) return;
 
-    form.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', (e) => {
     e.preventDefault();
 
-    const hostel = form.roomHostel.value;
-    const capacity = form.roomCapacity.value;
-    const price = form.roomPrice.value.trim();
-    const beds = form.roomBeds.value.trim();
-    const photoFiles = form.roomPhotos?.files || [];
+    const hostel = form.hostel.value;
+    const capacity = form.capacity.value;
+    const price = form.price.value.trim();
+    const totalRooms = form.totalRooms.value.trim();
 
-    if (!hostel || !price || !beds) {
-      flashInvalid(form.roomPrice.closest('.field').querySelector('input, .input-prefix'));
-      flashInvalid(form.roomBeds);
+    if (!hostel || !price || !totalRooms) {
+      flashInvalid(form.price.closest('.field').querySelector('input, .input-prefix'));
+      flashInvalid(form.totalRooms);
       return;
-    }
-
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn ? submitBtn.textContent : '';
-    if (photoFiles.length && submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Uploading photos…';
-    }
-
-    const newId = makeId();
-    let photoURLs = [];
-    if (photoFiles.length) {
-      try {
-        photoURLs = await uploadRoomPhotos(newId, photoFiles);
-      } catch (err) {
-        alert('The room was saved, but photo upload failed. This usually clears up on retry — you can edit the room later to add photos.');
-      }
     }
 
     const rooms = getRooms();
     rooms.unshift({
-      id: newId,
+      id: makeId(),
       hostel,
       capacity,
       price: Number(price),
-      beds: Number(beds),
+      beds: Number(totalRooms),
       filled: 0,
-      photoURLs,
     });
     setRooms(rooms);
 
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
     form.reset();
     renderCurrentPage();
 
     requestAnimationFrame(() => {
-      const newCard = document.querySelector('#roomGrid .room-card[data-id]');
-      if (newCard) {
-        newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        flashCardSuccess(newCard);
+      const newRow = document.querySelector('#inventoryBody tr[data-id]');
+      if (newRow) {
+        newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        flashSuccess(newRow);
       }
     });
   });
@@ -1267,13 +1247,14 @@ function initAddRoomForm() {
   const form = document.getElementById('addRoomForm');
   if (!form) return;
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const hostel = form.roomHostel.value;
     const capacity = form.roomCapacity.value;
     const price = form.roomPrice.value.trim();
     const beds = form.roomBeds.value.trim();
+    const photoFiles = form.roomPhotos?.files || [];
 
     if (!hostel || !price || !beds) {
       flashInvalid(form.roomPrice.closest('.field').querySelector('input, .input-prefix'));
@@ -1281,17 +1262,36 @@ function initAddRoomForm() {
       return;
     }
 
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn ? submitBtn.textContent : '';
+    if (photoFiles.length && submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading photos…';
+    }
+
+    const newId = makeId();
+    let photoURLs = [];
+    if (photoFiles.length) {
+      try {
+        photoURLs = await uploadRoomPhotos(newId, photoFiles);
+      } catch (err) {
+        alert('The room was saved, but photo upload failed. This usually clears up on retry — you can edit the room later to add photos.');
+      }
+    }
+
     const rooms = getRooms();
     rooms.unshift({
-      id: makeId(),
+      id: newId,
       hostel,
       capacity,
       price: Number(price),
       beds: Number(beds),
       filled: 0,
+      photoURLs,
     });
     setRooms(rooms);
 
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
     form.reset();
     renderCurrentPage();
 
@@ -1579,6 +1579,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSidebar();
   initFileDrop();
   initResetDemoButton();
+  initNewYearResetButton();
 
   initQuickAddForm();
   initAddHostelForm();
@@ -1606,3 +1607,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 });
+
+// Downloads a spreadsheet (CSV) of every booking — full history,
+// including cancelled ones — as a hard-copy record before a reset.
+function exportBookingsToCSV(bookings) {
+  const headers = ['Batch Number', 'Student Name', 'Phone', 'Hostel', 'Room Type', 'Price (GHS)', 'Date Paid', 'Status', 'Checked In'];
+  const rows = bookings.map((b) => [
+    b.batchNumber, b.studentName, b.phone || '', b.hostel, b.roomType,
+    b.price, b.bookedAt, b.status, b.checkedIn ? 'Yes' : 'No',
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `weCare-students-${dateStamp}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// Exports every booking to CSV, then — only after confirmation —
+// frees up every bed and clears the booking list, ready for a
+// fresh intake (e.g. a new academic year).
+function startNewYearReset() {
+  const bookings = getBookings();
+  if (bookings.length === 0) {
+    alert('There are no bookings to export yet.');
+    return;
+  }
+
+  exportBookingsToCSV(bookings);
+
+  const confirmed = confirm(
+    `A file with all ${bookings.length} student records has just downloaded to your computer.\n\n` +
+    `Once you confirm below, this will PERMANENTLY:\n` +
+    `• Free up every bed in every room\n` +
+    `• Clear the entire student/booking list\n\n` +
+    `Make sure the downloaded file opened correctly and is saved somewhere safe before continuing. Proceed?`
+  );
+  if (!confirmed) return;
+
+  const rooms = getRooms().map((r) => ({ ...r, filled: 0 }));
+  setRooms(rooms);
+  setBookings([]);
+}
+
+function initNewYearResetButton() {
+  const btn = document.getElementById('newYearResetBtn');
+  if (!btn) return;
+  btn.addEventListener('click', startNewYearReset);
+}
