@@ -20,9 +20,9 @@ import {
 
 const META_COLLECTION = 'meta';
 const SEED_STATUS_DOC = 'seedStatus';
-import {
-  ref, uploadBytes, getDownloadURL,
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-storage.js";
+
+const CLOUDINARY_CLOUD_NAME = 'wlrgu3h3';
+const CLOUDINARY_UPLOAD_PRESET = 'wecare_hostels';
 
 const HOSTELS_COLLECTION = 'hostels';
 const ROOMS_COLLECTION = 'rooms';
@@ -241,15 +241,6 @@ function checkInBooking(bookingId) {
   setBookings(bookings);
 }
 
-function checkInBooking(bookingId) {
-  const bookings = getBookings();
-  const booking = bookings.find((b) => b.id === bookingId);
-  if (!booking || booking.status === 'cancelled' || booking.checkedIn) return;
-
-  booking.checkedIn = true;
-  setBookings(bookings);
-}
-
 // Undoes a check-in — for when someone was checked in by mistake.
 // Not allowed on cancelled bookings, and a no-op if not checked in.
 function undoCheckIn(bookingId) {
@@ -283,15 +274,22 @@ async function deleteBookingPermanently(bookingId) {
   await deleteDoc(doc(db, BOOKINGS_COLLECTION, bookingId));
 }
 
-// Uploads a hostel's chosen photo file to Firebase Storage and
-// returns a public download URL to save on the hostel's record.
+// Uploads a hostel's chosen photo file to Cloudinary (free image
+// hosting) and returns a public URL to save on the hostel's record.
 // No admin has to touch any code for this — they just pick a
 // file in the form and it's stored automatically.
 async function uploadHostelPhoto(hostelId, file) {
-  const path = `hostel-photos/${hostelId}-${Date.now()}-${file.name}`;
-  const fileRef = ref(storage, path);
-  await uploadBytes(fileRef, file);
-  return getDownloadURL(fileRef);
+  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  formData.append('public_id', `hostel-${hostelId}-${Date.now()}`);
+
+  const response = await fetch(url, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error('Cloudinary upload failed');
+
+  const data = await response.json();
+  return data.secure_url;
 }
 
 /* ---------------------------------------------------------
@@ -999,6 +997,16 @@ function initAddHostelForm() {
 
     const hostels = getHostels();
 
+    async function safeUploadPhoto(hostelId) {
+      if (!photoFile) return '';
+      try {
+        return await uploadHostelPhoto(hostelId, photoFile);
+      } catch (err) {
+        alert('The hostel was saved, but the photo upload failed. This usually means Firebase Storage needs billing enabled (the Blaze plan) — the rest of the hostel is saved fine either way.');
+        return '';
+      }
+    }
+
     if (editingHostelId) {
       const hostel = hostels.find((h) => h.id === editingHostelId);
       if (hostel) {
@@ -1008,7 +1016,10 @@ function initAddHostelForm() {
         hostel.commissionType = commissionType;
         hostel.commissionValue = commissionValue;
         // Keep the existing photo unless a new one was chosen.
-        if (photoFile) hostel.photoURL = await uploadHostelPhoto(hostel.id, photoFile);
+        if (photoFile) {
+          const uploaded = await safeUploadPhoto(hostel.id);
+          if (uploaded) hostel.photoURL = uploaded;
+        }
       }
       setHostels(hostels);
 
@@ -1028,7 +1039,7 @@ function initAddHostelForm() {
     }
 
     const newId = makeId();
-    const photoURL = photoFile ? await uploadHostelPhoto(newId, photoFile) : '';
+    const photoURL = await safeUploadPhoto(newId);
     hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, photoURL });
     setHostels(hostels);
 
