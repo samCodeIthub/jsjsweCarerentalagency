@@ -278,18 +278,32 @@ async function deleteBookingPermanently(bookingId) {
 // hosting) and returns a public URL to save on the hostel's record.
 // No admin has to touch any code for this — they just pick a
 // file in the form and it's stored automatically.
-async function uploadHostelPhoto(hostelId, file) {
+// Shared uploader — used for both hostel photos and room photos.
+async function uploadImageToCloudinary(file, publicId) {
   const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  formData.append('public_id', `hostel-${hostelId}-${Date.now()}`);
+  formData.append('public_id', publicId);
 
   const response = await fetch(url, { method: 'POST', body: formData });
   if (!response.ok) throw new Error('Cloudinary upload failed');
 
   const data = await response.json();
   return data.secure_url;
+}
+
+async function uploadHostelPhoto(hostelId, file) {
+  return uploadImageToCloudinary(file, `hostel-${hostelId}-${Date.now()}`);
+}
+
+// Uploads several room photos (bedroom, kitchen, washroom, etc.)
+// at once and returns an array of their URLs, in order.
+async function uploadRoomPhotos(roomId, files) {
+  const uploads = Array.from(files).map((file, index) =>
+    uploadImageToCloudinary(file, `room-${roomId}-${Date.now()}-${index}`)
+  );
+  return Promise.all(uploads);
 }
 
 /* ---------------------------------------------------------
@@ -543,8 +557,14 @@ function roomCardHtml(room) {
   const title = room.capacity === '1' ? '1-in-a-Room · Private' : `${room.capacity}-in-a-Room · Shared`;
   const isFull = st.key === 'full';
 
+  const photosHtml = room.photoURLs?.length
+    ? `<div class="room-card__photos">${room.photoURLs.slice(0, 4).map((url) =>
+        `<img src="${escapeHtml(url)}" alt="" loading="lazy">`).join('')}</div>`
+    : '';
+
   return `
     <article class="room-card" data-id="${room.id}" data-capacity="${room.capacity}">
+      ${photosHtml}
       <div class="room-card__top">
         <span class="pill ${st.pillClass}">${st.label}</span>
         <span class="room-card__cap">${room.capacity} / room</span>
@@ -906,39 +926,59 @@ function initQuickAddForm() {
   const form = document.getElementById('quickAddForm');
   if (!form) return;
 
-  form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const hostel = form.hostel.value;
-    const capacity = form.capacity.value;
-    const price = form.price.value.trim();
-    const totalRooms = form.totalRooms.value.trim();
+    const hostel = form.roomHostel.value;
+    const capacity = form.roomCapacity.value;
+    const price = form.roomPrice.value.trim();
+    const beds = form.roomBeds.value.trim();
+    const photoFiles = form.roomPhotos?.files || [];
 
-    if (!hostel || !price || !totalRooms) {
-      flashInvalid(form.price.closest('.field').querySelector('input, .input-prefix'));
-      flashInvalid(form.totalRooms);
+    if (!hostel || !price || !beds) {
+      flashInvalid(form.roomPrice.closest('.field').querySelector('input, .input-prefix'));
+      flashInvalid(form.roomBeds);
       return;
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn ? submitBtn.textContent : '';
+    if (photoFiles.length && submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading photos…';
+    }
+
+    const newId = makeId();
+    let photoURLs = [];
+    if (photoFiles.length) {
+      try {
+        photoURLs = await uploadRoomPhotos(newId, photoFiles);
+      } catch (err) {
+        alert('The room was saved, but photo upload failed. This usually clears up on retry — you can edit the room later to add photos.');
+      }
     }
 
     const rooms = getRooms();
     rooms.unshift({
-      id: makeId(),
+      id: newId,
       hostel,
       capacity,
       price: Number(price),
-      beds: Number(totalRooms),
+      beds: Number(beds),
       filled: 0,
+      photoURLs,
     });
     setRooms(rooms);
 
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
     form.reset();
     renderCurrentPage();
 
     requestAnimationFrame(() => {
-      const newRow = document.querySelector('#inventoryBody tr[data-id]');
-      if (newRow) {
-        newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        flashSuccess(newRow);
+      const newCard = document.querySelector('#roomGrid .room-card[data-id]');
+      if (newCard) {
+        newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        flashCardSuccess(newCard);
       }
     });
   });
@@ -1120,8 +1160,14 @@ function initCommissionTypeToggle() {
    (cosmetic only in this trial — the file itself isn't saved)
 --------------------------------------------------------- */
 function initFileDrop() {
-  const dropLabel = document.querySelector('.file-drop');
-  const fileInput = document.getElementById('hostelPhoto');
+  initSingleFileDrop('hostelPhoto');
+  initMultiFileDrop('roomPhotos');
+}
+
+// For the hostel form's single-photo field.
+function initSingleFileDrop(inputId) {
+  const fileInput = document.getElementById(inputId);
+  const dropLabel = fileInput?.closest('.field')?.querySelector('.file-drop');
   if (!dropLabel || !fileInput) return;
 
   ['dragenter', 'dragover'].forEach((evt) => {
@@ -1134,13 +1180,45 @@ function initFileDrop() {
     const file = e.dataTransfer?.files?.[0];
     if (file) {
       fileInput.files = e.dataTransfer.files;
-      updateFileDropLabel(file.name);
+      const span = dropLabel.querySelector('span');
+      if (span) span.innerHTML = `<b>${escapeHtml(file.name)}</b> selected — click to change`;
     }
   });
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
-    if (file) updateFileDropLabel(file.name);
+    const span = dropLabel.querySelector('span');
+    if (file && span) span.innerHTML = `<b>${escapeHtml(file.name)}</b> selected — click to change`;
   });
+}
+
+// For the room form's multi-photo field.
+function initMultiFileDrop(inputId) {
+  const fileInput = document.getElementById(inputId);
+  const dropLabel = fileInput?.closest('.field')?.querySelector('.file-drop');
+  if (!dropLabel || !fileInput) return;
+
+  function updateLabel() {
+    const count = fileInput.files?.length || 0;
+    const span = dropLabel.querySelector('span');
+    if (!span) return;
+    span.innerHTML = count > 0
+      ? `<b>${count} photo${count > 1 ? 's' : ''} selected</b> — click to change`
+      : '<b>Click to upload</b> or drag photos here — bedroom, kitchen, washroom, etc.';
+  }
+
+  ['dragenter', 'dragover'].forEach((evt) => {
+    dropLabel.addEventListener(evt, (e) => { e.preventDefault(); dropLabel.classList.add('is-dragover'); });
+  });
+  ['dragleave', 'drop'].forEach((evt) => {
+    dropLabel.addEventListener(evt, (e) => { e.preventDefault(); dropLabel.classList.remove('is-dragover'); });
+  });
+  dropLabel.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files?.length) {
+      fileInput.files = e.dataTransfer.files;
+      updateLabel();
+    }
+  });
+  fileInput.addEventListener('change', updateLabel);
 }
 
 function updateFileDropLabel(fileName) {

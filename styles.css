@@ -901,6 +901,22 @@ svg {
   gap: 4px;
 }
 
+.room-card__photos {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.room-card__photos img {
+  width: 100%;
+  height: 56px;
+  object-fit: cover;
+  display: block;
+}
+
 /* =========================================================
    Rooms page — filter chips, checkboxes, room cards
    ========================================================= */
