@@ -55,6 +55,14 @@ function escapeHtml(str) {
   }[m]));
 }
 
+// Asks Cloudinary to serve a small, compressed version of a photo
+// instead of the full original — fixes janky/flickering hover
+// effects caused by repainting a huge image on every frame.
+function cloudinaryThumb(url, width, height) {
+  if (!url || !url.includes('/upload/')) return url;
+  return url.replace('/upload/', `/upload/w_${width},h_${height},c_fill,g_auto,q_auto,f_auto/`);
+}
+
 /* ---------------------------------------------------------
    Client identity — from Firebase Auth + the "users" collection
 --------------------------------------------------------- */
@@ -158,7 +166,7 @@ function renderHostelGrid(filterText) {
       : null;
     const initial = h.name.trim().charAt(0).toUpperCase();
     const blockInner = h.photoURL
-      ? `<img src="${escapeHtml(h.photoURL)}" alt="${escapeHtml(h.name)}" class="hostel-card__photo">`
+      ? `<img src="${escapeHtml(cloudinaryThumb(h.photoURL, 300, 96))}" alt="${escapeHtml(h.name)}" class="client-hostel-photo" loading="lazy">`
       : escapeHtml(initial);
 
     return `

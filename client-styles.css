@@ -353,7 +353,6 @@
 }
 
 .hostel-card:hover {
-    transform: translateY(-3px);
     box-shadow: var(--shadow-pop);
 }
 
@@ -371,10 +370,17 @@
     overflow: hidden;
 }
 
-.hostel-card__photo {
+/* .hostel-card__photo {
     width: 100%;
     height: 100%;
     object-fit: cover;
+} */
+
+.client-hostel-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .hostel-card__body {

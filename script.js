@@ -15,7 +15,7 @@
 
 import { db } from './firebase-config.js';
 import {
-  collection, doc, getDoc, setDoc, getDocs, writeBatch, onSnapshot,
+  collection, doc, getDoc, setDoc, getDocs, writeBatch, onSnapshot, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const META_COLLECTION = 'meta';
@@ -120,7 +120,7 @@ function resetDemoData() {
   saveCollection(BOOKINGS_COLLECTION, DEFAULT_BOOKINGS);
 }
 
-// Keeps the acache (and the screen) live-updated — including
+// Keeps the cache (and the screen) live-updated — including
 // when a change happens on a DIFFERENT browser or device.
 function startLiveSync() {
   function maybeRender() {
@@ -272,6 +272,15 @@ function confirmBookingPayment(bookingId) {
 async function deleteBookingPermanently(bookingId) {
   bookingsCache = bookingsCache.filter((b) => b.id !== bookingId);
   await deleteDoc(doc(db, BOOKINGS_COLLECTION, bookingId));
+}
+
+// Asks Cloudinary to serve a small, compressed version of a photo
+// instead of the full original — fixes janky/flickering hover
+// effects (and slow loads) caused by downloading a huge original
+// image just to shrink it with CSS.
+function cloudinaryThumb(url, width, height) {
+  if (!url || !url.includes('/upload/')) return url;
+  return url.replace('/upload/', `/upload/w_${width},h_${height},c_fill,g_auto,q_auto,f_auto/`);
 }
 
 // Uploads a hostel's chosen photo file to Cloudinary (free image
@@ -482,7 +491,7 @@ function hostelCardHtml(hostel, rooms, bookings) {
       </div>`;
 
   const coverInner = hostel.photoURL
-    ? `<img src="${escapeHtml(hostel.photoURL)}" alt="${escapeHtml(hostel.name)}" class="hostel-card__photo">`
+    ? `<img src="${escapeHtml(cloudinaryThumb(hostel.photoURL, 400, 160))}" alt="${escapeHtml(hostel.name)}" class="hostel-card__photo" loading="lazy">`
     : `<svg class="hostel-card__photo-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-4 3-3-2-4 3"/></svg>`;
 
   return `
@@ -559,7 +568,7 @@ function roomCardHtml(room) {
 
   const photosHtml = room.photoURLs?.length
     ? `<div class="room-card__photos">${room.photoURLs.slice(0, 4).map((url) =>
-        `<img src="${escapeHtml(url)}" alt="" loading="lazy">`).join('')}</div>`
+        `<img src="${escapeHtml(cloudinaryThumb(url, 150, 100))}" alt="" loading="lazy">`).join('')}</div>`
     : '';
 
   return `
@@ -1432,7 +1441,7 @@ document.addEventListener('click', (e) => {
     return;
   }
 
-    // Undo a check-in made by mistake
+  // Undo a check-in made by mistake
   if (action === 'undo-check-in') {
     const row = btn.closest('tr[data-id]');
     if (row && confirm('Undo this check-in? The student will show as "Awaiting Check-in" again.')) {
