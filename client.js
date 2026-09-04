@@ -55,13 +55,20 @@ function escapeHtml(str) {
   }[m]));
 }
 
-// Asks Cloudinary to serve a small, compressed version of a photo
-// instead of the full original — fixes janky/flickering hover
-// effects (and slow loads) caused by downloading a huge original
-// image just to shrink it with CSS.
+// Asks Cloudinary to serve a small, compressed, CROPPED version of
+// a photo instead of the full original — used for thumbnails where
+// a fixed frame size matters more than showing the whole image.
 function cloudinaryThumb(url, width, height) {
   if (!url || !url.includes('/upload/')) return url;
   return url.replace('/upload/', `/upload/w_${width},h_${height},c_fill,g_auto,q_auto,f_auto/`);
+}
+
+// Like cloudinaryThumb, but NEVER crops — just shrinks the photo
+// down if it's larger than maxWidth, keeping its original shape
+// and full contents intact. Used for the full-size lightbox view.
+function cloudinaryFull(url, maxWidth) {
+  if (!url || !url.includes('/upload/')) return url;
+  return url.replace('/upload/', `/upload/w_${maxWidth},c_limit,q_auto,f_auto/`);
 }
 
 /* ---------------------------------------------------------
@@ -242,11 +249,13 @@ function openRoomModal(hostelId) {
       });
     });
 
+    // Lightbox thumbnails use cloudinaryFull (NOT cloudinaryThumb) —
+    // the full-size viewer must never crop the photo, only shrink it.
     list.querySelectorAll('[data-lightbox-room]').forEach((thumb) => {
       thumb.addEventListener('click', () => {
         const room = rooms.find((r) => r.id === thumb.dataset.lightboxRoom);
         if (!room?.photoURLs?.length) return;
-        const fullSizeUrls = room.photoURLs.map((url) => cloudinaryThumb(url, 1000, 750));
+        const fullSizeUrls = room.photoURLs.map((url) => cloudinaryFull(url, 1200));
         openLightbox(fullSizeUrls, Number(thumb.dataset.lightboxIndex));
       });
     });
