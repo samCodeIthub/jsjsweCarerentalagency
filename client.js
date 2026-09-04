@@ -1,7 +1,7 @@
 // =========================================================
 // weCare Client Portal — client.js
-// Hostels/rooms/bookings now read/write Firestore, matching
-// the admin's script.js — so anything added by the admin (or
+// Hostels/rooms/bookings read/write Firestore, matching the
+// admin's script.js — so anything added by the admin (or
 // booked by any student) shows up everywhere, instantly.
 // =========================================================
 
@@ -9,7 +9,7 @@ import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
   doc, getDoc, collection, onSnapshot,
-  writeBatch, getDocs,
+  writeBatch,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const HOSTELS_COLLECTION = 'hostels';
@@ -57,7 +57,8 @@ function escapeHtml(str) {
 
 // Asks Cloudinary to serve a small, compressed version of a photo
 // instead of the full original — fixes janky/flickering hover
-// effects caused by repainting a huge image on every frame.
+// effects (and slow loads) caused by downloading a huge original
+// image just to shrink it with CSS.
 function cloudinaryThumb(url, width, height) {
   if (!url || !url.includes('/upload/')) return url;
   return url.replace('/upload/', `/upload/w_${width},h_${height},c_fill,g_auto,q_auto,f_auto/`);
@@ -165,6 +166,10 @@ function renderHostelGrid(filterText) {
       ? Math.min(...hostelRooms.map((r) => Number(r.price) || Infinity))
       : null;
     const initial = h.name.trim().charAt(0).toUpperCase();
+    // Note: this uses a client-only class name (client-hostel-photo)
+    // so it can never collide with the admin stylesheet's own
+    // .hostel-card__photo rule (styles.css and client-styles.css
+    // are both loaded on this page).
     const blockInner = h.photoURL
       ? `<img src="${escapeHtml(cloudinaryThumb(h.photoURL, 300, 96))}" alt="${escapeHtml(h.name)}" class="client-hostel-photo" loading="lazy">`
       : escapeHtml(initial);
@@ -211,9 +216,14 @@ function openRoomModal(hostelId) {
     list.innerHTML = rooms.map((r) => {
       const open = Math.max(0, Number(r.beds) - Number(r.filled));
       const label = r.capacity === '1' ? '1 student / room' : `${r.capacity} students / room`;
+      const photosHtml = r.photoURLs?.length
+        ? `<div class="client-modal__room-photos">${r.photoURLs.map((url, i) =>
+            `<img src="${escapeHtml(cloudinaryThumb(url, 100, 70))}" alt="" loading="lazy" data-lightbox-room="${escapeHtml(r.id)}" data-lightbox-index="${i}">`).join('')}</div>`
+        : '';
       return `
         <div class="client-modal__room">
-          <div>
+          ${photosHtml}
+          <div class="client-modal__room-info">
             <p class="client-modal__room-type">${escapeHtml(label)}</p>
             <p class="client-modal__room-price">GHS ${Number(r.price).toLocaleString()} / semester</p>
             <p class="client-modal__room-open">${open > 0 ? `${open} bed${open === 1 ? '' : 's'} open` : 'Full'}</p>
@@ -229,6 +239,15 @@ function openRoomModal(hostelId) {
       btn.addEventListener('click', () => {
         const room = rooms.find((r) => r.id === btn.dataset.bookRoom);
         if (room) renderPaymentStep(hostel, room);
+      });
+    });
+
+    list.querySelectorAll('[data-lightbox-room]').forEach((thumb) => {
+      thumb.addEventListener('click', () => {
+        const room = rooms.find((r) => r.id === thumb.dataset.lightboxRoom);
+        if (!room?.photoURLs?.length) return;
+        const fullSizeUrls = room.photoURLs.map((url) => cloudinaryThumb(url, 1000, 750));
+        openLightbox(fullSizeUrls, Number(thumb.dataset.lightboxIndex));
       });
     });
   }
@@ -288,6 +307,52 @@ function renderPaymentStep(hostel, room) {
       </div>
     `;
     document.getElementById('paymentDoneBtn').addEventListener('click', closeRoomModal);
+  });
+}
+
+/* ---------------------------------------------------------
+   Photo lightbox — click a room thumbnail to browse full-size
+--------------------------------------------------------- */
+let lightboxPhotos = [];
+let lightboxIndex = 0;
+
+function openLightbox(photos, startIndex) {
+  lightboxPhotos = photos;
+  lightboxIndex = startIndex;
+  renderLightboxImage();
+  document.getElementById('photoLightbox').style.display = 'flex';
+}
+
+function renderLightboxImage() {
+  const img = document.getElementById('lightboxImage');
+  const counter = document.getElementById('lightboxCounter');
+  img.src = lightboxPhotos[lightboxIndex];
+  counter.textContent = `${lightboxIndex + 1} / ${lightboxPhotos.length}`;
+}
+
+function lightboxNext() {
+  lightboxIndex = (lightboxIndex + 1) % lightboxPhotos.length;
+  renderLightboxImage();
+}
+
+function lightboxPrev() {
+  lightboxIndex = (lightboxIndex - 1 + lightboxPhotos.length) % lightboxPhotos.length;
+  renderLightboxImage();
+}
+
+function closeLightbox() {
+  document.getElementById('photoLightbox').style.display = 'none';
+}
+
+function initLightbox() {
+  document.getElementById('lightboxCloseBtn').addEventListener('click', closeLightbox);
+  document.getElementById('lightboxNextBtn').addEventListener('click', lightboxNext);
+  document.getElementById('lightboxPrevBtn').addEventListener('click', lightboxPrev);
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('photoLightbox').style.display !== 'flex') return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight') lightboxNext();
+    if (e.key === 'ArrowLeft') lightboxPrev();
   });
 }
 
@@ -383,3 +448,4 @@ export function initClientPortal() {
 
 window.renderHostelGrid = renderHostelGrid;
 window.closeRoomModal = closeRoomModal;
+window.initLightbox = initLightbox;

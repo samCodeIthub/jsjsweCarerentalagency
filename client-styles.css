@@ -562,6 +562,26 @@
     padding: 14px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
+    flex-wrap: wrap;
+}
+
+.client-modal__room-info {
+    flex: 1;
+    min-width: 140px;
+}
+
+.client-modal__room-photos {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    order: -1;
+}
+
+.client-modal__room-photos img {
+    width: 60px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 6px;
 }
 
 .client-modal__room-type {
@@ -701,5 +721,86 @@
 @media (min-width: 641px) and (max-width: 1024px) {
     .hostel-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.client-modal__room-photos img {
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.client-modal__room-photos img:hover {
+    opacity: 0.85;
+}
+
+.photo-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.photo-lightbox__image {
+    max-width: 85vw;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+}
+
+.photo-lightbox__close {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 36px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.photo-lightbox__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.photo-lightbox__nav--prev {
+    left: 20px;
+}
+
+.photo-lightbox__nav--next {
+    right: 20px;
+}
+
+.photo-lightbox__counter {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 14px;
+}
+
+@media (max-width: 640px) {
+    .photo-lightbox__nav {
+        width: 38px;
+        height: 38px;
+        font-size: 16px;
+    }
+
+    .photo-lightbox__close {
+        font-size: 30px;
     }
 }
