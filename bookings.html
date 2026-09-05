@@ -281,17 +281,16 @@
                                 <circle cx="11" cy="11" r="7" />
                                 <path d="M21 21l-4.3-4.3" />
                             </svg>
-                            <input type="search" placeholder="Search by student, hostel, or batch no…"
-                                aria-label="Search bookings">
+                            <input type="search" placeholder="Search by student, hostel, or batch no…" aria-label="Search bookings">
                         </label>
                     </div>
-
+                
                     <p class="table__muted-note" style="margin-bottom: 16px;">
                         This log only includes bookings made through weCare — occupancy shown on the Rooms page may also
                         include prior manually-tracked bookings. Ask arriving students for their batch number to verify
                         identity before check-in.
                     </p>
-
+                
                     <!-- Room-type filter chips -->
                     <div class="filter-chips" id="bookingsFilterChips" role="group" aria-label="Filter by room type">
                         <button class="chip is-active" type="button" data-filter="all">All Rooms</button>
@@ -299,7 +298,7 @@
                         <button class="chip" type="button" data-filter="2">2 in a Room</button>
                         <button class="chip" type="button" data-filter="4">4 in a Room</button>
                     </div>
-
+                
                     <div class="table-scroll">
                         <table class="table">
                             <thead>
@@ -308,12 +307,13 @@
                                     <th scope="col">Student</th>
                                     <th scope="col">Hostel</th>
                                     <th scope="col">Room Type</th>
-                                    <th scope="col">Amount Due</th>
-                                    <th scope="col">Requested</th>
+                                    <th scope="col">Price / Semester</th>
+                                    <th scope="col">Date Paid</th>
+                                    <th scope="col">Status</th>
                                     <th scope="col" class="table__actions-head">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="pendingPaymentsBody">
+                            <tbody id="bookingsBody">
                                 <!-- Rows are rendered by script.js from saved data -->
                             </tbody>
                         </table>
