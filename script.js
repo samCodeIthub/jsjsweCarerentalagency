@@ -92,9 +92,30 @@ async function saveCollection(name, list) {
   await batch.commit();
 }
 
-function setHostels(list) { hostelsCache = list; saveCollection(HOSTELS_COLLECTION, list); }
-function setRooms(list) { roomsCache = list; saveCollection(ROOMS_COLLECTION, list); }
-function setBookings(list) { bookingsCache = list; saveCollection(BOOKINGS_COLLECTION, list); }
+function setHostels(list) {
+  if (!cachesReady.hostels) {
+    alert('Still loading your data — please wait a moment and try again.');
+    return;
+  }
+  hostelsCache = list;
+  saveCollection(HOSTELS_COLLECTION, list);
+}
+function setRooms(list) {
+  if (!cachesReady.rooms) {
+    alert('Still loading your data — please wait a moment and try again.');
+    return;
+  }
+  roomsCache = list;
+  saveCollection(ROOMS_COLLECTION, list);
+}
+function setBookings(list) {
+  if (!cachesReady.bookings) {
+    alert('Still loading your data — please wait a moment and try again.');
+    return;
+  }
+  bookingsCache = list;
+  saveCollection(BOOKINGS_COLLECTION, list);
+}
 
 // Seeds demo data ONLY the very first time this database is
 // ever used — tracked with a one-time flag, not by checking
@@ -1011,6 +1032,7 @@ function initAddHostelForm() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
 
     const name = form.hostelName.value.trim();
     const location = form.hostelLocation.value.trim();
@@ -1080,6 +1102,7 @@ function initAddHostelForm() {
     const newId = makeId();
     const photoURL = await safeUploadPhoto(newId);
     hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, photoURL });
+    setHostels(hostels);
 
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
     form.reset();

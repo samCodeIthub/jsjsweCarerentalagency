@@ -110,6 +110,9 @@ function computeRevenueSplit(price, hostel) {
 async function clientBookRoom(roomId, moveInDate) {
   const client = getCurrentClient();
   if (!client) return { ok: false, message: 'You need to be logged in to book.' };
+  if (!cachesReady.hostels || !cachesReady.rooms || !cachesReady.bookings) {
+    return { ok: false, message: 'Still loading — please wait a moment and try again.' };
+  }
 
   const room = getRooms().find((r) => r.id === roomId);
   if (!room) return { ok: false, message: 'That room type no longer exists.' };
