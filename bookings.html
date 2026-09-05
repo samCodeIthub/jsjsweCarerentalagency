@@ -260,8 +260,11 @@
                         </div>
                         <div class="field">
                             <label for="bookingStudent">Student name</label>
-                            <input type="text" id="bookingStudent" name="bookingStudent" placeholder="e.g. Ama Serwaa"
-                                required>
+                            <input type="text" id="bookingStudent" name="bookingStudent" placeholder="e.g. Ama Serwaa" required>
+                        </div>
+                        <div class="field">
+                            <label for="bookingMoveIn">Move-in date</label>
+                            <input type="date" id="bookingMoveIn" name="bookingMoveIn" required>
                         </div>
                         <div class="field field--action">
                             <button class="btn btn--primary" type="submit">Book This Room</button>
@@ -305,13 +308,12 @@
                                     <th scope="col">Student</th>
                                     <th scope="col">Hostel</th>
                                     <th scope="col">Room Type</th>
-                                    <th scope="col">Price / Semester</th>
-                                    <th scope="col">Date Paid</th>
-                                    <th scope="col">Status</th>
+                                    <th scope="col">Amount Due</th>
+                                    <th scope="col">Requested</th>
                                     <th scope="col" class="table__actions-head">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="bookingsBody">
+                            <tbody id="pendingPaymentsBody">
                                 <!-- Rows are rendered by script.js from saved data -->
                             </tbody>
                         </table>

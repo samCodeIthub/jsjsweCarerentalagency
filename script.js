@@ -178,7 +178,7 @@ function computeRevenueSplit(price, hostel) {
   return { companyCut, ownerPayout };
 }
 
-function bookRoom(roomId, studentName) {
+function bookRoom(roomId, studentName, moveInDate) {
   const rooms = getRooms();
   const room = rooms.find((r) => r.id === roomId);
   if (!room) return false;
@@ -190,6 +190,7 @@ function bookRoom(roomId, studentName) {
   const hostels = getHostels();
   const hostelObj = hostels.find((h) => h.name === room.hostel);
   const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj);
+  const moveOutDate = hostelObj?.moveOutDate || '';
 
   const bookings = getBookings();
   bookings.unshift({
@@ -205,6 +206,8 @@ function bookRoom(roomId, studentName) {
     phone: '',
     batchNumber: generateBatchNumber(),
     bookedAt: new Date().toISOString().slice(0, 10), // date of payment
+    moveInDate,
+    moveOutDate,
     status: 'confirmed',
     checkedIn: false,
   });
@@ -707,12 +710,17 @@ function renderBookingsPage() {
 }
 
 function pendingBookingRowHtml(booking) {
+  const stay = booking.moveInDate
+    ? `${escapeHtml(booking.moveInDate)} → ${escapeHtml(booking.moveOutDate)}`
+    : `<span class="table__muted-note">Not provided</span>`;
+
   return `
     <tr data-id="${booking.id}">
       <td data-label="Batch No."><span class="batch-code">${escapeHtml(booking.batchNumber)}</span></td>
       <td data-label="Student">${escapeHtml(booking.studentName)}</td>
       <td data-label="Hostel">${escapeHtml(booking.hostel)}</td>
       <td data-label="Room Type">${escapeHtml(booking.roomType)}</td>
+      <td data-label="Move-in / Move-out">${stay}</td>
       <td data-label="Amount Due">GHS ${Number(booking.price).toLocaleString('en-US')}</td>
       <td data-label="Requested">${escapeHtml(booking.bookedAt)}</td>
       <td data-label="Actions" class="table__actions">
@@ -1009,6 +1017,7 @@ function initAddHostelForm() {
     const status = form.hostelStatus.value;
     const commissionType = form.hostelCommissionType.value;
     const commissionValue = Number(form.hostelCommissionValue.value) || 0;
+    const moveOutDate = form.hostelMoveOutDate.value;
     const photoFile = form.hostelPhoto?.files?.[0] || null;
 
     if (!name || !location) {
@@ -1044,6 +1053,7 @@ function initAddHostelForm() {
         hostel.status = status;
         hostel.commissionType = commissionType;
         hostel.commissionValue = commissionValue;
+        hostel.moveOutDate = moveOutDate;
         // Keep the existing photo unless a new one was chosen.
         if (photoFile) {
           const uploaded = await safeUploadPhoto(hostel.id);
@@ -1069,8 +1079,7 @@ function initAddHostelForm() {
 
     const newId = makeId();
     const photoURL = await safeUploadPhoto(newId);
-    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, photoURL });
-    setHostels(hostels);
+    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, photoURL });
 
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
     form.reset();
@@ -1101,6 +1110,8 @@ function startEditingHostel(hostelId) {
   form.hostelStatus.value = hostel.status;
   form.hostelCommissionType.value = hostel.commissionType || 'fixed';
   form.hostelCommissionValue.value = hostel.commissionValue || 0;
+  if (form.hostelMoveOutDate) form.hostelMoveOutDate.value = hostel.moveOutDate || '';
+
   form.hostelCommissionType.dispatchEvent(new Event('change')); // updates the GHS/% prefix
   if (form.hostelRooms) form.hostelRooms.value = '';
   if (form.hostelDescription) form.hostelDescription.value = '';
@@ -1326,13 +1337,14 @@ function initRecordBookingForm() {
 
     const roomId = form.bookingRoom.value;
     const studentName = form.bookingStudent.value.trim();
+    const moveInDate = form.bookingMoveIn.value;
 
-    if (!roomId || !studentName) {
+    if (!roomId || !studentName || !moveInDate) {
       flashInvalid(form.bookingStudent);
       return;
     }
 
-    const ok = bookRoom(roomId, studentName);
+    const ok = bookRoom(roomId, studentName, moveInDate);
     if (!ok) {
       alert('That room just filled up — pick another one.');
       renderCurrentPage();
@@ -1545,7 +1557,7 @@ document.addEventListener('click', (e) => {
     return;
   }
 
-  if (action === 'book') {
+    if (action === 'book') {
     const rooms = getRooms();
     const room = rooms.find((r) => r.id === id);
     if (!room || Number(room.filled) >= Number(room.beds)) return;
@@ -1553,7 +1565,10 @@ document.addEventListener('click', (e) => {
     const studentName = prompt('Student name for this booking:', '');
     if (!studentName || !studentName.trim()) return; // cancelled or empty
 
-    bookRoom(id, studentName.trim());
+    const moveInDate = prompt('Move-in date (YYYY-MM-DD):', '');
+    if (!moveInDate) return;
+
+    bookRoom(id, studentName.trim(), moveInDate);
     renderCurrentPage();
   }
 });

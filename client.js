@@ -107,7 +107,7 @@ function computeRevenueSplit(price, hostel) {
   return { companyCut, ownerPayout: price - companyCut };
 }
 
-async function clientBookRoom(roomId) {
+async function clientBookRoom(roomId, moveInDate) {
   const client = getCurrentClient();
   if (!client) return { ok: false, message: 'You need to be logged in to book.' };
 
@@ -117,6 +117,7 @@ async function clientBookRoom(roomId) {
 
   const hostelObj = getHostels().find((h) => h.name === room.hostel);
   const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj);
+  const moveOutDate = hostelObj?.moveOutDate || '';
 
   const booking = {
     id: makeId(),
@@ -132,6 +133,8 @@ async function clientBookRoom(roomId) {
     phone: client.phone,
     batchNumber: generateBatchNumber(),
     bookedAt: new Date().toISOString().slice(0, 10),
+    moveInDate,
+    moveOutDate,
     // The bed is reserved right away so nobody else can take it
     // while the admin verifies the Mobile Money payment — but the
     // booking only becomes real once they confirm it on their end.
@@ -287,6 +290,11 @@ function renderPaymentStep(hostel, room) {
         <p class="payment-step__number">${hasNumber ? escapeHtml(settings.momoNumber) : 'Contact the admin for a number'}</p>
         ${hasNumber ? `<p class="payment-step__name">${escapeHtml(settings.momoName || '')}${settings.momoName && settings.momoNetwork ? ' · ' : ''}${escapeHtml(settings.momoNetwork || '')}</p>` : ''}
       </div>
+      <div class="field">
+        <label for="moveInDate">Move-in date</label>
+        <input type="date" id="moveInDate" required>
+      </div>
+      ${hostel.moveOutDate ? `<p class="table__muted-note">Move-out date for this hostel: <strong>${escapeHtml(hostel.moveOutDate)}</strong></p>` : ''}
       <p class="table__muted-note">Send the exact amount above, then tap the button below. We'll verify the payment and confirm your bed — you'll see it update under "My Bookings".</p>
       <button class="btn btn--primary btn--block" type="button" id="confirmSentBtn" ${hasNumber ? '' : 'disabled'}>I've Sent the Payment</button>
       <button class="btn btn--ghost btn--block" type="button" id="backToRoomsBtn">Back</button>
@@ -298,9 +306,16 @@ function renderPaymentStep(hostel, room) {
   const sendBtn = document.getElementById('confirmSentBtn');
   if (!sendBtn) return;
   sendBtn.addEventListener('click', async () => {
+    const moveInDate = document.getElementById('moveInDate').value;
+
+    if (!moveInDate) {
+      alert('Please choose your move-in date.');
+      return;
+    }
+
     sendBtn.disabled = true;
     sendBtn.textContent = 'Processing…';
-    const result = await clientBookRoom(room.id);
+    const result = await clientBookRoom(room.id, moveInDate);
     if (!result.ok) {
       alert(result.message);
       sendBtn.disabled = false;
@@ -389,6 +404,7 @@ function renderMyBookings() {
       <div class="booking-ticket__main">
         <h3>${escapeHtml(b.hostel)}</h3>
         <p>${escapeHtml(b.roomType)} · Booked ${escapeHtml(b.bookedAt)}</p>
+        ${b.moveInDate ? `<p>Stay: ${escapeHtml(b.moveInDate)} → ${escapeHtml(b.moveOutDate)}</p>` : ''}
         <p class="booking-ticket__code">${escapeHtml(b.batchNumber)}</p>
       </div>
       <div class="booking-ticket__right">
