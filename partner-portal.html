@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partner Portal · weCare</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="client-styles.css">
+    <script type="module" src="firebase-config.js"></script>
+</head>
+
+<body class="client-body">
+
+    <header class="client-header">
+        <div class="client-header__brand">
+            <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true">
+                <path
+                    d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z"
+                    fill="currentColor" />
+                <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C" />
+                <circle cx="108" cy="128" r="4.5" fill="#FF7A59" />
+            </svg>
+            <span class="brand__name">we<b>Care</b></span>
+        </div>
+        <div class="client-header__user">
+            <span id="welcomeName">Hi there</span>
+            <button class="btn btn--ghost" id="logoutBtn" type="button">Log Out</button>
+        </div>
+    </header>
+
+    <main class="client-main">
+
+        <section class="client-hero" style="grid-template-columns: 1fr;">
+            <div>
+                <p class="client-hero__eyebrow">Partner dashboard</p>
+                <h1 id="partnerHostelName">Your Hostel</h1>
+                <p>See your bookings as they come in, and the amount you're earning from each one.</p>
+            </div>
+        </section>
+
+        <section class="client-section">
+            <section class="stats" aria-label="Partner overview">
+                <article class="stat-card stat-card--teal">
+                    <p class="stat-card__label">Total Bookings</p>
+                    <p class="stat-card__value" id="statPartnerTotal">0</p>
+                </article>
+                <article class="stat-card stat-card--amber">
+                    <p class="stat-card__label">Awaiting Payment</p>
+                    <p class="stat-card__value" id="statPartnerPending">0</p>
+                </article>
+                <article class="stat-card stat-card--teal">
+                    <p class="stat-card__label">Checked In</p>
+                    <p class="stat-card__value" id="statPartnerCheckedIn">0</p>
+                </article>
+                <article class="stat-card stat-card--teal">
+                    <p class="stat-card__label">Your Total Earnings</p>
+                    <p class="stat-card__value" id="statPartnerEarnings">GHS 0</p>
+                </article>
+            </section>
+        </section>
+
+        <section class="client-section">
+            <div class="client-section__head">
+                <h2>Your bookings</h2>
+                <button class="btn btn--primary" type="button" id="printPaidBtn">Print Paid Students</button>
+            </div>
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Batch No.</th>
+                            <th scope="col">Student</th>
+                            <th scope="col">Room Type</th>
+                            <th scope="col">Price</th>
+                            <th scope="col">Your Payout</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="partnerBookingsBody">
+                        <!-- Rows rendered by partner.js -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="page-footer">
+        <p>weCare Rental Agency · Partner Portal</p>
+    </footer>
+
+    <script type="module">
+        import { requirePartner, logoutUser } from './auth-guard.js';
+        import { initPartnerPortal, printPaidRecords } from './partner.js';
+
+        requirePartner();
+        initPartnerPortal();
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            logoutUser();
+        });
+
+        document.getElementById('printPaidBtn').addEventListener('click', () => {
+            printPaidRecords();
+        });
+    </script>
+</body>
+
+</html>

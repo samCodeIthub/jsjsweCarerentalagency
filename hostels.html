@@ -125,13 +125,16 @@
                 </div>
 
                 <div class="topbar__actions">
-                    <button class="icon-btn" type="button" aria-label="Notifications">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
-                            <path d="M10 21a2 2 0 0 0 4 0" />
-                        </svg>
-                        <span class="icon-btn__dot" aria-hidden="true"></span>
-                    </button>
+                    <div class="notifications-wrap">
+                        <button class="icon-btn" type="button" id="notificationsBtn" aria-label="Notifications">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
+                                <path d="M10 21a2 2 0 0 0 4 0" />
+                            </svg>
+                            <span class="icon-btn__dot" id="notificationsDot" aria-hidden="true" hidden></span>
+                        </button>
+                        <div class="notifications-dropdown" id="notificationsDropdown" hidden></div>
+                    </div>
                     <a class="btn btn--primary" href="#add-hostel" id="openAddHostelBtn">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M12 5v14" />
@@ -189,6 +192,19 @@
                                 <label for="hostelLocation">Location</label>
                                 <input type="text" id="hostelLocation" name="hostelLocation"
                                     placeholder="e.g. Near UEW South Campus" required>
+                            </div>
+                            <div class="field">
+                                <label for="hostelMapLink">Google Maps link (optional)</label>
+                                <input type="url" id="hostelMapLink" name="hostelMapLink"
+                                    placeholder="Paste the Google Maps link for this hostel">
+                            </div>
+                            <div class="field field--wide">
+                                <label>Nearest campus (used for the location filter)</label>
+                                <div class="checkbox-row">
+                                    <label><input type="radio" name="hostelCampus" value="North Campus"> North Campus</label>
+                                    <label><input type="radio" name="hostelCampus" value="South Campus"> South Campus</label>
+                                    <label><input type="radio" name="hostelCampus" value="Central Campus"> Central Campus</label>
+                                </div>
                             </div>
                             <div class="field">
                                 <label for="hostelStatus">Listing status</label>

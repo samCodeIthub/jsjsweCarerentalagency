@@ -287,6 +287,69 @@ svg {
   border: 1.5px solid var(--surface);
 }
 
+.notifications-wrap {
+  position: relative;
+}
+
+.notifications-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 340px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  z-index: 60;
+  padding: 8px;
+}
+
+.notifications-dropdown__header {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px 10px;
+}
+
+.notifications-dropdown__empty {
+  padding: 20px 10px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.notification-item {
+  display: block;
+  padding: 10px 10px;
+  border-radius: var(--radius-md);
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.notification-item__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.notification-item__meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .avatar {
   width: 40px;
   height: 40px;

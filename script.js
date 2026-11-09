@@ -909,6 +909,71 @@ function renderCurrentPage() {
   renderRoomsPage();
   renderBookingsPage();
   renderStudentsPage();
+  renderNotifications();
+}
+
+/* ---------------------------------------------------------
+   Notifications bell — shows recent bookings (room bookings
+   AND hostel viewings) with their payment/check-in status, so
+   the admin doesn't have to go hunting on the Bookings page.
+--------------------------------------------------------- */
+function renderNotifications() {
+  const dot = document.getElementById('notificationsDot');
+  const dropdown = document.getElementById('notificationsDropdown');
+  if (!dot || !dropdown) return;
+
+  const bookings = getBookings();
+  const hasPending = bookings.some((b) => b.status === 'pending');
+  dot.hidden = !hasPending;
+
+  const recent = [...bookings]
+    .sort((a, b) => (b.bookedAt || '').localeCompare(a.bookedAt || ''))
+    .slice(0, 8);
+
+  if (recent.length === 0) {
+    dropdown.innerHTML = `<p class="notifications-dropdown__empty">No bookings yet.</p>`;
+    return;
+  }
+
+  const itemsHtml = recent.map((b) => {
+    const isCancelled = b.status === 'cancelled';
+    const isPending = b.status === 'pending';
+    const isCheckedIn = !isCancelled && !isPending && b.checkedIn;
+
+    let pillClass = 'pill--warning';
+    let label = 'Awaiting Check-in';
+    if (isCancelled) { pillClass = 'pill--draft'; label = 'Cancelled'; }
+    else if (isPending) { pillClass = 'pill--warning'; label = 'Payment Pending'; }
+    else if (isCheckedIn) { pillClass = 'pill--available'; label = 'Checked In'; }
+
+    return `
+      <div class="notification-item">
+        <div class="notification-item__row">
+          <span class="notification-item__title">${escapeHtml(b.studentName)} — ${escapeHtml(b.roomType)}</span>
+          <span class="pill ${pillClass}">${label}</span>
+        </div>
+        <p class="notification-item__meta">${escapeHtml(b.hostel)} · GHS ${Number(b.price).toLocaleString('en-US')} · ${escapeHtml(b.bookedAt)}</p>
+      </div>`;
+  }).join('');
+
+  dropdown.innerHTML = `<p class="notifications-dropdown__header">Recent bookings</p>${itemsHtml}`;
+}
+
+function initNotifications() {
+  const btn = document.getElementById('notificationsBtn');
+  const dropdown = document.getElementById('notificationsDropdown');
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.hidden = !dropdown.hidden;
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== btn) {
+      dropdown.hidden = true;
+    }
+  });
 }
 
 /* ---------------------------------------------------------
@@ -1040,6 +1105,8 @@ function initAddHostelForm() {
     const commissionType = form.hostelCommissionType.value;
     const commissionValue = Number(form.hostelCommissionValue.value) || 0;
     const moveOutDate = form.hostelMoveOutDate.value;
+    const mapLink = form.hostelMapLink ? form.hostelMapLink.value.trim() : '';
+    const campus = form.querySelector('input[name="hostelCampus"]:checked')?.value || '';
     const photoFile = form.hostelPhoto?.files?.[0] || null;
 
     if (!name || !location) {
@@ -1076,6 +1143,8 @@ function initAddHostelForm() {
         hostel.commissionType = commissionType;
         hostel.commissionValue = commissionValue;
         hostel.moveOutDate = moveOutDate;
+        hostel.mapLink = mapLink;
+        hostel.campus = campus;
         // Keep the existing photo unless a new one was chosen.
         if (photoFile) {
           const uploaded = await safeUploadPhoto(hostel.id);
@@ -1101,7 +1170,7 @@ function initAddHostelForm() {
 
     const newId = makeId();
     const photoURL = await safeUploadPhoto(newId);
-    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, photoURL });
+    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, mapLink, campus, photoURL });
     setHostels(hostels);
 
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
@@ -1134,6 +1203,10 @@ function startEditingHostel(hostelId) {
   form.hostelCommissionType.value = hostel.commissionType || 'fixed';
   form.hostelCommissionValue.value = hostel.commissionValue || 0;
   if (form.hostelMoveOutDate) form.hostelMoveOutDate.value = hostel.moveOutDate || '';
+  if (form.hostelMapLink) form.hostelMapLink.value = hostel.mapLink || '';
+  const campusRadio = form.querySelector(`input[name="hostelCampus"][value="${hostel.campus || ''}"]`);
+  form.querySelectorAll('input[name="hostelCampus"]').forEach((r) => { r.checked = false; });
+  if (campusRadio) campusRadio.checked = true;
 
   form.hostelCommissionType.dispatchEvent(new Event('change')); // updates the GHS/% prefix
   if (form.hostelRooms) form.hostelRooms.value = '';
@@ -1637,6 +1710,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initPaymentSettingsForm();
   initBookingsFilters();
   initStudentsFilters();
+  initNotifications();
 
   await seedDataIfEmpty();
   startLiveSync();

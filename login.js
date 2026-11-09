@@ -30,6 +30,8 @@ async function loginUser(email, password) {
   const role = userDoc.data().role;
   if (role === 'admin') {
     window.location.href = 'index.html';
+  } else if (role === 'partner') {
+    window.location.href = 'partner-portal.html';
   } else {
     window.location.href = 'client-portal.html';
   }

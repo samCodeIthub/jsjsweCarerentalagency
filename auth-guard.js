@@ -43,6 +43,24 @@ function requireClient() {
 }
 
 /**
+ * Call this at the top of partner-portal.html
+ * Redirects to login.html if not logged in, or if logged in as
+ * an admin or a client.
+ */
+function requirePartner() {
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      window.location.href = 'login.html';
+      return;
+    }
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (!userDoc.exists() || userDoc.data().role !== 'partner') {
+      window.location.href = 'login.html';
+    }
+  });
+}
+
+/**
  * Call this when a "Log Out" button is clicked, on either side.
  */
 function logoutUser() {
@@ -51,4 +69,4 @@ function logoutUser() {
   });
 }
 
-export { requireAdmin, requireClient, logoutUser };
+export { requireAdmin, requireClient, requirePartner, logoutUser };
