@@ -1106,6 +1106,7 @@ function initAddHostelForm() {
     const commissionValue = Number(form.hostelCommissionValue.value) || 0;
     const moveOutDate = form.hostelMoveOutDate.value;
     const mapLink = form.hostelMapLink ? form.hostelMapLink.value.trim() : '';
+    const paystackSubaccount = form.hostelPaystackSubaccount ? form.hostelPaystackSubaccount.value.trim() : '';
     const campus = form.querySelector('input[name="hostelCampus"]:checked')?.value || '';
     const photoFile = form.hostelPhoto?.files?.[0] || null;
 
@@ -1144,6 +1145,7 @@ function initAddHostelForm() {
         hostel.commissionValue = commissionValue;
         hostel.moveOutDate = moveOutDate;
         hostel.mapLink = mapLink;
+        hostel.paystackSubaccount = paystackSubaccount;
         hostel.campus = campus;
         // Keep the existing photo unless a new one was chosen.
         if (photoFile) {
@@ -1170,7 +1172,7 @@ function initAddHostelForm() {
 
     const newId = makeId();
     const photoURL = await safeUploadPhoto(newId);
-    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, mapLink, campus, photoURL });
+    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, mapLink, paystackSubaccount, campus, photoURL });
     setHostels(hostels);
 
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
@@ -1204,6 +1206,7 @@ function startEditingHostel(hostelId) {
   form.hostelCommissionValue.value = hostel.commissionValue || 0;
   if (form.hostelMoveOutDate) form.hostelMoveOutDate.value = hostel.moveOutDate || '';
   if (form.hostelMapLink) form.hostelMapLink.value = hostel.mapLink || '';
+  if (form.hostelPaystackSubaccount) form.hostelPaystackSubaccount.value = hostel.paystackSubaccount || '';
   const campusRadio = form.querySelector(`input[name="hostelCampus"][value="${hostel.campus || ''}"]`);
   form.querySelectorAll('input[name="hostelCampus"]').forEach((r) => { r.checked = false; });
   if (campusRadio) campusRadio.checked = true;

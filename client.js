@@ -9,8 +9,16 @@ import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
   doc, getDoc, collection, onSnapshot,
-  writeBatch,
+  writeBatch, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+// =========================================================
+// PAYSTACK — paste your PUBLIC key here (starts with "pk_").
+// Find it in your Paystack Dashboard → Settings → API Keys & Webhooks.
+// Until this is filled in, online payment will show a friendly
+// message instead of crashing.
+// =========================================================
+const PAYSTACK_PUBLIC_KEY = 'pk_test_c0cc112a225311cb29f99a76526e27c45c5d669c';
 
 const HOSTELS_COLLECTION = 'hostels';
 const ROOMS_COLLECTION = 'rooms';
@@ -85,6 +93,71 @@ async function addBookingDoc(booking) {
   const batch = writeBatch(db);
   batch.set(doc(db, BOOKINGS_COLLECTION, id), data);
   await batch.commit();
+}
+
+// Updates ONE booking's fields — used to flip a booking from
+// "pending" to "confirmed" the moment Paystack confirms payment.
+async function updateBookingDoc(bookingId, changes) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, BOOKINGS_COLLECTION, bookingId), changes, { merge: true });
+  await batch.commit();
+}
+
+// If a student closes the Paystack popup without paying, this
+// undoes the bed hold and removes the never-paid booking record,
+// so nothing is left cluttering the lists for a payment that
+// never happened.
+async function releaseUnpaidBooking(booking) {
+  if (booking.roomId) {
+    const room = getRooms().find((r) => r.id === booking.roomId);
+    if (room) await updateRoomDoc(room.id, { filled: Math.max(0, Number(room.filled) - 1) });
+  }
+  await deleteDoc(doc(db, BOOKINGS_COLLECTION, booking.id));
+}
+
+// Opens the Paystack checkout popup. Handles card, Mobile Money,
+// and bank transfer — whatever the student's Paystack account
+// supports. amountGHS is in cedis; Paystack itself wants kobo
+// (pesewas), hence the ×100.
+//
+// If the hostel has a Paystack Subaccount Code set (admin fills this
+// in on the Hostels page, once per hostel), the hostel manager's
+// share is sent straight to their own Mobile Money/bank account —
+// weCare's cut (companyCutGHS) stays behind automatically. Leave it
+// blank on a hostel and the full payment just goes to the main
+// weCare Paystack account, same as before.
+function payWithPaystack({ amountGHS, companyCutGHS, subaccountCode, email, reference, onSuccess, onClose }) {
+  if (!window.PaystackPop) {
+    alert('The payment system failed to load. Please check your internet connection and try again.');
+    return;
+  }
+  if (!PAYSTACK_PUBLIC_KEY || PAYSTACK_PUBLIC_KEY.startsWith('PASTE_')) {
+    alert("Online payment isn't switched on yet — the admin still needs to add the Paystack key.");
+    return;
+  }
+
+  const options = {
+    key: PAYSTACK_PUBLIC_KEY,
+    email,
+    amount: Math.round(amountGHS * 100),
+    currency: 'GHS',
+    reference,
+    onSuccess: (response) => onSuccess(response),
+    onCancel: () => { if (onClose) onClose(); },
+  };
+
+  if (subaccountCode) {
+    options.subaccountCode = subaccountCode;
+    // weCare's cut is a flat amount taken off the top; the rest of
+    // the payment goes straight to the hostel manager's subaccount.
+    options.transactionCharge = Math.round((companyCutGHS || 0) * 100);
+    // weCare's main account absorbs the Paystack transaction fee,
+    // so the hostel manager always receives their full share.
+    options.bearer = 'account';
+  }
+
+  const popup = new window.PaystackPop();
+  popup.newTransaction(options);
 }
 
 function escapeHtml(str) {
@@ -166,7 +239,10 @@ async function clientBookViewing(hostelId) {
     bookedAt: new Date().toISOString().slice(0, 10),
     moveInDate: nextFridayDate(),
     moveOutDate: '',
-    status: 'pending',
+    // Viewing fee is paid in person at the visit, not online — so
+    // this is booked as 'confirmed' right away rather than waiting
+    // on a payment step.
+    status: 'confirmed',
     checkedIn: false,
   };
 
@@ -224,8 +300,9 @@ async function clientBookRoom(roomId, moveInDate) {
     moveInDate,
     moveOutDate,
     // The bed is reserved right away so nobody else can take it
-    // while the admin verifies the Mobile Money payment — but the
-    // booking only becomes real once they confirm it on their end.
+    // while the Paystack popup is open. If payment succeeds this
+    // flips to 'confirmed'; if the student closes the popup without
+    // paying, releaseUnpaidBooking() frees the bed again.
     status: 'pending',
     checkedIn: false,
   };
@@ -412,16 +489,14 @@ function openRoomModal(hostelId) {
 
 /* ---------------------------------------------------------
    Viewing step — shown inside the room modal when a student
-   wants to pay to see the hostel in person before booking.
-   Same pattern as renderPaymentStep: nothing is confirmed until
-   the admin verifies the Mobile Money payment.
+   wants to book a visit to see the hostel in person. The
+   viewing fee is paid physically, in person, when they meet —
+   no online payment for this step.
 --------------------------------------------------------- */
 function renderViewingStep(hostel) {
   const list = document.getElementById('modalRoomList');
   if (!list) return;
 
-  const settings = getPaymentSettings();
-  const hasNumber = Boolean(settings.momoNumber);
   const visitDate = nextFridayDate();
 
   list.innerHTML = `
@@ -429,36 +504,33 @@ function renderViewingStep(hostel) {
       <p class="payment-step__room">Hostel Viewing — ${escapeHtml(hostel.name)}</p>
       <p class="payment-step__price">GHS ${VIEWING_FEE} viewing fee</p>
       <p class="table__muted-note">Viewings happen every Friday. Your visit will be on <strong>${escapeHtml(visitDate)}</strong>.</p>
-      <div class="payment-step__momo">
-        <p class="ticket__label">SEND MOBILE MONEY TO</p>
-        <p class="payment-step__number">${hasNumber ? escapeHtml(settings.momoNumber) : 'Contact the admin for a number'}</p>
-        ${hasNumber ? `<p class="payment-step__name">${escapeHtml(settings.momoName || '')}${settings.momoName && settings.momoNetwork ? ' · ' : ''}${escapeHtml(settings.momoNetwork || '')}</p>` : ''}
-      </div>
-      <p class="table__muted-note">Send GHS ${VIEWING_FEE}, then tap the button below. We'll confirm your viewing once we verify the payment.</p>
-      <button class="btn btn--primary btn--block" type="button" id="confirmViewingBtn" ${hasNumber ? '' : 'disabled'}>I've Sent the Viewing Fee</button>
+      <p class="table__muted-note">Pay the GHS ${VIEWING_FEE} viewing fee in person when you meet us for the visit.</p>
+      <button class="btn btn--primary btn--block" type="button" id="confirmViewingBtn">Confirm Viewing</button>
       <button class="btn btn--ghost btn--block" type="button" id="backToRoomsBtnViewing">Back</button>
     </div>
   `;
 
   document.getElementById('backToRoomsBtnViewing').addEventListener('click', () => openRoomModal(hostel.id));
 
-  const btn = document.getElementById('confirmViewingBtn');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    btn.textContent = 'Processing…';
+  const confirmBtn = document.getElementById('confirmViewingBtn');
+  if (!confirmBtn) return;
+
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Booking…';
     const result = await clientBookViewing(hostel.id);
     if (!result.ok) {
       alert(result.message);
-      btn.disabled = false;
-      btn.textContent = "I've Sent the Viewing Fee";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Confirm Viewing';
       return;
     }
+
     list.innerHTML = `
       <div class="payment-step">
-        <p class="payment-step__processing">Processing your viewing request&hellip;</p>
+        <p class="payment-step__processing">Viewing booked!</p>
         <p class="table__muted-note">Your batch number is <strong>${escapeHtml(result.booking.batchNumber)}</strong> — save this.
-          We'll confirm your viewing for <strong>${escapeHtml(result.booking.moveInDate)}</strong> once we verify the payment.</p>
+          Your viewing is on <strong>${escapeHtml(result.booking.moveInDate)}</strong>. Pay GHS ${VIEWING_FEE} in person when you meet us.</p>
         <button class="btn btn--primary btn--block" type="button" id="viewingDoneBtn">Done</button>
       </div>
     `;
@@ -468,68 +540,77 @@ function renderViewingStep(hostel) {
 
 /* ---------------------------------------------------------
    Payment step — shown inside the room modal after a student
-   picks a room. Nothing is booked yet; the bed is only reserved
-   once they say they've sent the money, and the admin still has
-   to confirm the payment before it counts as a real booking.
+   picks a room. Payment goes through Paystack; the bed is
+   confirmed the instant payment succeeds — no manual admin
+   confirmation step needed anymore.
 --------------------------------------------------------- */
 function renderPaymentStep(hostel, room) {
   const list = document.getElementById('modalRoomList');
   if (!list) return;
 
-  const settings = getPaymentSettings();
   const label = room.capacity === '1' ? '1 student / room' : `${room.capacity} students / room`;
-  const hasNumber = Boolean(settings.momoNumber);
+  const priceLabel = Number(room.price).toLocaleString();
 
   list.innerHTML = `
     <div class="payment-step">
       <p class="payment-step__room">${escapeHtml(label)} — ${escapeHtml(hostel.name)}</p>
-      <p class="payment-step__price">GHS ${Number(room.price).toLocaleString()} / semester</p>
-      <div class="payment-step__momo">
-        <p class="ticket__label">SEND MOBILE MONEY TO</p>
-        <p class="payment-step__number">${hasNumber ? escapeHtml(settings.momoNumber) : 'Contact the admin for a number'}</p>
-        ${hasNumber ? `<p class="payment-step__name">${escapeHtml(settings.momoName || '')}${settings.momoName && settings.momoNetwork ? ' · ' : ''}${escapeHtml(settings.momoNetwork || '')}</p>` : ''}
-      </div>
+      <p class="payment-step__price">GHS ${priceLabel} / semester</p>
       <div class="field">
         <label for="moveInDate">Move-in date</label>
         <input type="date" id="moveInDate" required>
       </div>
       ${hostel.moveOutDate ? `<p class="table__muted-note">Move-out date for this hostel: <strong>${escapeHtml(hostel.moveOutDate)}</strong></p>` : ''}
-      <p class="table__muted-note">Send the exact amount above, then tap the button below. We'll verify the payment and confirm your bed — you'll see it update under "My Bookings".</p>
-      <button class="btn btn--primary btn--block" type="button" id="confirmSentBtn" ${hasNumber ? '' : 'disabled'}>I've Sent the Payment</button>
+      <p class="table__muted-note">Pay securely online with Paystack (card, Mobile Money, or bank). Your bed is booked the instant payment goes through.</p>
+      <button class="btn btn--primary btn--block" type="button" id="payNowBtn">Pay GHS ${priceLabel} Now</button>
       <button class="btn btn--ghost btn--block" type="button" id="backToRoomsBtn">Back</button>
     </div>
   `;
 
   document.getElementById('backToRoomsBtn').addEventListener('click', () => openRoomModal(hostel.id));
 
-  const sendBtn = document.getElementById('confirmSentBtn');
-  if (!sendBtn) return;
-  sendBtn.addEventListener('click', async () => {
-    const moveInDate = document.getElementById('moveInDate').value;
+  const payBtn = document.getElementById('payNowBtn');
+  if (!payBtn) return;
+  const resetBtn = () => { payBtn.disabled = false; payBtn.textContent = `Pay GHS ${priceLabel} Now`; };
 
+  payBtn.addEventListener('click', async () => {
+    const moveInDate = document.getElementById('moveInDate').value;
     if (!moveInDate) {
       alert('Please choose your move-in date.');
       return;
     }
 
-    sendBtn.disabled = true;
-    sendBtn.textContent = 'Processing…';
+    payBtn.disabled = true;
+    payBtn.textContent = 'Opening payment…';
     const result = await clientBookRoom(room.id, moveInDate);
     if (!result.ok) {
       alert(result.message);
-      sendBtn.disabled = false;
-      sendBtn.textContent = "I've Sent the Payment";
+      resetBtn();
       return;
     }
-    list.innerHTML = `
-      <div class="payment-step">
-        <p class="payment-step__processing">Processing your payment&hellip;</p>
-        <p class="table__muted-note">Your batch number is <strong>${escapeHtml(result.booking.batchNumber)}</strong> — save this.
-          Once we confirm your payment, this will show as "Awaiting Check-in" under My Bookings.</p>
-        <button class="btn btn--primary btn--block" type="button" id="paymentDoneBtn">Done</button>
-      </div>
-    `;
-    document.getElementById('paymentDoneBtn').addEventListener('click', closeRoomModal);
+
+    const client = getCurrentClient();
+    payWithPaystack({
+      amountGHS: room.price,
+      companyCutGHS: result.booking.companyCut,
+      subaccountCode: hostel.paystackSubaccount || '',
+      email: client.email,
+      reference: result.booking.batchNumber,
+      onSuccess: async () => {
+        await updateBookingDoc(result.booking.id, { status: 'confirmed' });
+        list.innerHTML = `
+          <div class="payment-step">
+            <p class="payment-step__processing">Payment successful!</p>
+            <p class="table__muted-note">Your batch number is <strong>${escapeHtml(result.booking.batchNumber)}</strong> — save this. Your bed is booked.</p>
+            <button class="btn btn--primary btn--block" type="button" id="paymentDoneBtn">Done</button>
+          </div>
+        `;
+        document.getElementById('paymentDoneBtn').addEventListener('click', closeRoomModal);
+      },
+      onClose: async () => {
+        await releaseUnpaidBooking(result.booking);
+        resetBtn();
+      },
+    });
   });
 }
 
