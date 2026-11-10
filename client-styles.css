@@ -65,6 +65,7 @@
     border: 1px solid var(--border);
     color: var(--ink);
     font-weight: 600;
+    margin-bottom: 20px;
 }
 
 .btn--google:hover {

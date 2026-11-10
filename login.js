@@ -9,6 +9,10 @@ import { auth, db } from './firebase-config.js';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+  deleteUser,
+  signOut,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
   doc, getDoc, setDoc,
@@ -25,6 +29,59 @@ async function loginUser(email, password) {
 
   if (!userDoc.exists()) {
     throw new Error('No profile found for this account. Contact the admin.');
+  }
+
+  const role = userDoc.data().role;
+  if (role === 'admin') {
+    window.location.href = 'index.html';
+  } else if (role === 'partner') {
+    window.location.href = 'partner-portal.html';
+  } else {
+    window.location.href = 'client-portal.html';
+  }
+}
+
+/* ---------------------------------------------------------
+   GOOGLE SIGN-IN — for students. Signing in with Google either
+   logs in an existing account, or (the first time) creates a
+   new CLIENT profile automatically. Since Google handles the
+   password, students never get locked out.
+--------------------------------------------------------- */
+// mode = 'login'  -> only for people who already have an account.
+//                    If there's none, tell them to sign up instead.
+// mode = 'signup' -> creates the account if new, or just logs in if
+//                    they already have one.
+async function loginWithGoogle(mode) {
+  const provider = new GoogleAuthProvider();
+  const cred = await signInWithPopup(auth, provider);
+  const userRef = doc(db, 'users', cred.user.uid);
+  const userDoc = await getDoc(userRef);
+
+  if (!userDoc.exists() && mode === 'login') {
+    // Google just created a bare sign-in for them — undo it, since
+    // they never actually signed up here.
+    try { await deleteUser(cred.user); } catch (e) { await signOut(auth); }
+    const err = new Error('no-account');
+    err.code = 'no-account';
+    throw err;
+  }
+
+  if (!userDoc.exists()) {
+    // New student signing up with Google — ask for a phone number
+    // so the admin and hostel managers can reach them.
+    let phone = '';
+    while (!phone) {
+      phone = (window.prompt('Welcome! Please enter your phone number (e.g. 024 555 1234):') || '').trim();
+    }
+    await setDoc(userRef, {
+      role: 'client',
+      fullName: cred.user.displayName || '',
+      email: cred.user.email || '',
+      phone,
+      createdAt: new Date().toISOString().slice(0, 10),
+    });
+    window.location.href = 'client-portal.html';
+    return;
   }
 
   const role = userDoc.data().role;
@@ -74,6 +131,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   tabLogin.addEventListener('click', showLogin);
   tabRegister.addEventListener('click', showRegister);
+
+  function wireGoogleButton(buttonId, mode, errorId) {
+    const btn = document.getElementById(buttonId);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const errorEl = document.getElementById(errorId);
+      if (errorEl) errorEl.style.display = 'none';
+      try {
+        await loginWithGoogle(mode);
+      } catch (err) {
+        console.error('Google sign-in error:', err);
+        if (err.code === 'no-account') {
+          showRegister();
+          const regError = document.getElementById('registerError');
+          regError.textContent = "You don't have an account yet. Sign up below or tap \"Sign up with Google\".";
+          regError.style.display = 'block';
+        } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+          // They just closed the popup — nothing to report.
+        } else if (errorEl) {
+          errorEl.textContent = 'Google sign-in failed (' + (err.code || err.message) + '). Please try again.';
+          errorEl.style.display = 'block';
+        }
+        btn.disabled = false;
+      }
+    });
+  }
+  wireGoogleButton('googleLoginBtn', 'login', 'loginError');
+  wireGoogleButton('googleSignupBtn', 'signup', 'registerError');
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
