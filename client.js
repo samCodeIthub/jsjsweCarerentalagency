@@ -127,13 +127,22 @@ async function releaseUnpaidBooking(booking) {
 // blank on a hostel and the full payment just goes to the main
 // weCare Paystack account, same as before.
 function payWithPaystack({ amountGHS, companyCutGHS, subaccountCode, email, reference, onSuccess, onClose }) {
+  // If anything stops the payment window from opening, tell the
+  // student and call onClose so the held bed is released and the
+  // button goes back to normal (instead of getting stuck).
+  const fail = (message) => {
+    alert(message);
+    if (onClose) onClose();
+  };
+
   if (!window.PaystackPop) {
-    alert('The payment system failed to load. Please check your internet connection and try again.');
-    return;
+    return fail('The payment system failed to load. Please check your internet connection and try again.');
   }
   if (!PAYSTACK_PUBLIC_KEY || PAYSTACK_PUBLIC_KEY.startsWith('PASTE_')) {
-    alert("Online payment isn't switched on yet — the admin still needs to add the Paystack key.");
-    return;
+    return fail("Online payment isn't switched on yet — the admin still needs to add the Paystack key.");
+  }
+  if (!email) {
+    return fail('Your account has no email address, so payment cannot start. Please contact the admin.');
   }
 
   const options = {
@@ -141,23 +150,30 @@ function payWithPaystack({ amountGHS, companyCutGHS, subaccountCode, email, refe
     email,
     amount: Math.round(amountGHS * 100),
     currency: 'GHS',
-    reference,
-    onSuccess: (response) => onSuccess(response),
-    onCancel: () => { if (onClose) onClose(); },
+    ref: reference,
+    // No "channels" list on purpose: Paystack then shows every payment
+    // method switched on for your account (Mobile Money, card, bank…).
+    callback: (response) => onSuccess(response),
+    onClose: () => { if (onClose) onClose(); },
   };
 
   if (subaccountCode) {
-    options.subaccountCode = subaccountCode;
+    options.subaccount = subaccountCode;
     // weCare's cut is a flat amount taken off the top; the rest of
     // the payment goes straight to the hostel manager's subaccount.
-    options.transactionCharge = Math.round((companyCutGHS || 0) * 100);
+    options.transaction_charge = Math.round((companyCutGHS || 0) * 100);
     // weCare's main account absorbs the Paystack transaction fee,
     // so the hostel manager always receives their full share.
     options.bearer = 'account';
   }
 
-  const popup = new window.PaystackPop();
-  popup.newTransaction(options);
+  try {
+    const handler = window.PaystackPop.setup(options);
+    handler.openIframe();
+  } catch (err) {
+    console.error('Paystack could not open:', err);
+    fail('The payment window could not open (' + (err && err.message ? err.message : 'unknown error') + '). Please try again.');
+  }
 }
 
 function escapeHtml(str) {
@@ -518,7 +534,13 @@ function renderViewingStep(hostel) {
   confirmBtn.addEventListener('click', async () => {
     confirmBtn.disabled = true;
     confirmBtn.textContent = 'Booking…';
-    const result = await clientBookViewing(hostel.id);
+    let result;
+    try {
+      result = await clientBookViewing(hostel.id);
+    } catch (err) {
+      console.error('Viewing could not be saved:', err);
+      result = { ok: false, message: 'Your viewing could not be saved (' + (err.code || err.message) + '). Please tell the admin.' };
+    }
     if (!result.ok) {
       alert(result.message);
       confirmBtn.disabled = false;
@@ -581,7 +603,13 @@ function renderPaymentStep(hostel, room) {
 
     payBtn.disabled = true;
     payBtn.textContent = 'Opening payment…';
-    const result = await clientBookRoom(room.id, moveInDate);
+    let result;
+    try {
+      result = await clientBookRoom(room.id, moveInDate);
+    } catch (err) {
+      console.error('Booking could not be saved:', err);
+      result = { ok: false, message: 'Your booking could not be saved (' + (err.code || err.message) + '). Please tell the admin.' };
+    }
     if (!result.ok) {
       alert(result.message);
       resetBtn();
