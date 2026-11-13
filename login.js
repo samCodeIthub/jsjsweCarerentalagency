@@ -26,7 +26,10 @@ import {
 --------------------------------------------------------- */
 const INTENT = new URLSearchParams(location.search).get('as');
 const ROLE_FOR = { admin: 'admin', partner: 'partner', client: 'client' };
-const HOME_FOR = { admin: 'dashboard.html', partner: 'partner-portal.html', client: 'client-portal.html' };
+function clientHome() {
+  return 'client-portal.html';
+}
+const HOME_FOR = { admin: 'dashboard.html', partner: 'partner-portal.html', get client() { return clientHome(); } };
 
 async function routeByRole(role) {
   const actual = role === 'admin' || role === 'partner' ? role : 'client';
@@ -103,7 +106,7 @@ async function loginWithGoogle(mode) {
       phone,
       createdAt: new Date().toISOString().slice(0, 10),
     });
-    window.location.href = 'client-portal.html';
+    window.location.href = clientHome();
     return;
   }
 
@@ -125,7 +128,7 @@ async function registerClient(fullName, email, phone, password) {
     createdAt: new Date().toISOString().slice(0, 10),
   });
 
-  window.location.href = 'client-portal.html';
+  window.location.href = clientHome();
 }
 
 /* ---------------------------------------------------------

@@ -28,6 +28,7 @@
         <nav class="client-header__nav">
             <a href="#browse" class="client-header__link is-active">Browse Hostels</a>
             <a href="#my-bookings" class="client-header__link">My Bookings</a>
+            <a href="apartments.html" class="client-header__link">Apartments</a>
             <a href="#" id="openProfileLink" class="client-header__link">My Profile</a>
         </nav>
         <div class="client-header__user">
@@ -75,10 +76,9 @@
     
         <section id="browse" class="client-section">
             <div class="client-section__head">
-                <h2>Available places</h2>
+                <h2>Available hostels</h2>
                 <p id="availSummary"></p>
             </div>
-            <div class="filter-chips" id="categoryFilterChips"></div>
             <div class="filter-chips" id="locationFilterChips"></div>
             <div class="hostel-grid" id="clientHostelGrid">
                 <!-- rendered by client.js -->
@@ -144,6 +144,7 @@
         <p>weCare Rental Agency · Student Portal</p>
     </footer>
 
+    <script>window.WECARE_CATEGORY='hostel';</script>
     <script src="client.js"></script>
     <script type="module">
         import { requireClient, logoutUser } from './auth-guard.js';
