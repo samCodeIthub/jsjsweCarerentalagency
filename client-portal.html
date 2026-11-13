@@ -11,7 +11,7 @@
         href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=3">
-    <link rel="stylesheet" href="client-styles.css?v=3">
+    <link rel="stylesheet" href="client-styles.css?v=6">
     <script type="module" src="firebase-config.js"></script>
     <script src="https://js.paystack.co/v1/inline.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -28,7 +28,6 @@
         <nav class="client-header__nav">
             <a href="#browse" class="client-header__link is-active">Browse Hostels</a>
             <a href="#my-bookings" class="client-header__link">My Bookings</a>
-            <a href="apartments.html" class="client-header__link">Apartments</a>
             <a href="#" id="openProfileLink" class="client-header__link">My Profile</a>
         </nav>
         <div class="client-header__user">
@@ -37,9 +36,9 @@
         </div>
     </header>
 
-    <main class="client-main">
-    
-        <section class="client-hero">
+        
+        <section class="client-hero client-hero--photo">
+        <div class="client-hero__inner">
             <div>
                 <p class="client-hero__eyebrow">Semester bookings <span>·</span> open now</p>
                 <h1>Get your bed locked in before rooms run out.</h1>
@@ -53,32 +52,17 @@
                     <input type="search" id="hostelSearch" placeholder="Search hostels by name or location…">
                 </label>
             </div>
-    
-            <div class="client-hero__ticket-wrap">
-                <div class="ticket">
-                    <div class="ticket__row-top">
-                        <div>
-                            <p class="ticket__label">HOSTEL</p>
-                            <p class="ticket__hostel">Ambassador Hall</p>
-                        </div>
-                        <span class="ticket__badge">CONFIRMED</span>
-                    </div>
-                    <div class="ticket__divider"></div>
-                    <p class="ticket__label">BATCH NO.</p>
-                    <p class="ticket__code">WC-4X9K2P</p>
-                    <div class="ticket__meta">
-                        <span>2 in a Room</span>
-                        <span>GHS 1,800</span>
-                    </div>
-                </div>
-            </div>
-        </section>
+</div>
+    </section>
+
+    <main class="client-main">
     
         <section id="browse" class="client-section">
             <div class="client-section__head">
-                <h2>Available hostels</h2>
+                <h2>Available places</h2>
                 <p id="availSummary"></p>
             </div>
+            <div class="filter-chips" id="categoryFilterChips"></div>
             <div class="filter-chips" id="locationFilterChips"></div>
             <div class="hostel-grid" id="clientHostelGrid">
                 <!-- rendered by client.js -->
@@ -144,7 +128,6 @@
         <p>weCare Rental Agency · Student Portal</p>
     </footer>
 
-    <script>window.WECARE_CATEGORY='hostel';</script>
     <script src="client.js"></script>
     <script type="module">
         import { requireClient, logoutUser } from './auth-guard.js';
