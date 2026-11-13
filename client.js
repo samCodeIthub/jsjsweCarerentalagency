@@ -8,7 +8,7 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
-  doc, getDoc, collection, onSnapshot,
+  doc, getDoc, updateDoc, collection, onSnapshot,
   writeBatch, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
@@ -521,6 +521,7 @@ function renderViewingStep(hostel) {
       <p class="payment-step__price">GHS ${VIEWING_FEE} viewing fee</p>
       <p class="table__muted-note">Viewings happen every Friday. Your visit will be on <strong>${escapeHtml(visitDate)}</strong>.</p>
       <p class="table__muted-note">Pay the GHS ${VIEWING_FEE} viewing fee in person when you meet us for the visit.</p>
+      <p class="table__muted-note">We will call or WhatsApp you on <strong>${escapeHtml(getCurrentClient().phone)}</strong>. Wrong number? Fix it in <a href="#" onclick="closeRoomModal();openProfile();return false;">My Profile</a>.</p>
       <button class="btn btn--primary btn--block" type="button" id="confirmViewingBtn">Confirm Viewing</button>
       <button class="btn btn--ghost btn--block" type="button" id="backToRoomsBtnViewing">Back</button>
     </div>
@@ -726,9 +727,105 @@ function renderMyBookings() {
             : b.checkedIn
               ? '<span class="pill pill--available">Checked in</span>'
               : '<span class="pill pill--warning">Awaiting check-in</span>'}
+        ${b.status === 'confirmed' ? `<button class="btn btn--ghost" type="button" data-qr="${escapeHtml(b.batchNumber)}" style="margin-top:8px;">Show QR</button>` : ''}
       </div>
     </div>
   `).join('');
+
+  list.querySelectorAll('[data-qr]').forEach((btn) => {
+    btn.addEventListener('click', () => showBookingQr(mine.find((b) => b.batchNumber === btn.dataset.qr)));
+  });
+}
+
+function showBookingQr(b) {
+  if (!b) return;
+  const box = document.getElementById('qrBox');
+  box.innerHTML = '';
+  if (typeof QRCode === 'undefined') { box.textContent = 'QR could not load. Check your internet and try again.'; }
+  else {
+    new QRCode(box, { text: 'WECARE:' + b.batchNumber + ':' + b.studentName, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  }
+  document.getElementById('qrCaption').textContent = b.studentName + ' · ' + b.hostel + ' · ' + b.batchNumber;
+  document.getElementById('qrDownloadBtn').onclick = () => {
+    const canvas = box.querySelector('canvas');
+    const img = box.querySelector('img');
+    const url = canvas ? canvas.toDataURL('image/png') : (img ? img.src : '');
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url; a.download = 'weCare-' + b.batchNumber + '.png'; a.click();
+  };
+  document.getElementById('qrModal').style.display = 'flex';
+}
+
+/* ---------------------------------------------------------
+   My Profile — edit name/phone, see viewings & bookings history
+--------------------------------------------------------- */
+function renderProfile() {
+  const client = getCurrentClient();
+  const box = document.getElementById('profileBox');
+  if (!client || !box) return;
+  // Don't wipe the form while the student is typing in it
+  if (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') {
+    renderProfileHistory();
+    return;
+  }
+  box.innerHTML = `
+    <form id="profileForm" class="profile-form">
+      <label>Full name<input type="text" id="profName" required value="${escapeHtml(client.fullName)}"></label>
+      <label>Phone number<input type="tel" id="profPhone" required value="${escapeHtml(client.phone)}" placeholder="e.g. 024 555 1234"></label>
+      <p class="table__muted-note">Use the <strong>same number you pay with (Mobile Money)</strong>. It must be a number we can <strong>call and WhatsApp</strong>. You can change it here anytime.</p>
+      <label>Email<input type="email" value="${escapeHtml(client.email)}" disabled></label>
+      <p class="profile-form__msg" id="profMsg"></p>
+      <button class="btn btn--primary" type="submit" id="profSaveBtn">Save details</button>
+    </form>
+    <div id="profileHistory"></div>`;
+  document.getElementById('profileForm').addEventListener('submit', saveProfile);
+  renderProfileHistory();
+}
+
+function renderProfileHistory() {
+  const client = getCurrentClient();
+  const el = document.getElementById('profileHistory');
+  if (!client || !el) return;
+  const mine = getBookings().filter((b) => b.studentId === client.id && b.status !== 'cancelled');
+  const viewings = mine.filter((b) => b.type === 'viewing');
+  const rooms = mine.filter((b) => b.type !== 'viewing');
+  const today = new Date().toISOString().slice(0, 10);
+  const visited = viewings.filter((b) => b.moveInDate && b.moveInDate < today);
+  const hostelsSeen = [...new Set(viewings.map((b) => b.hostel))];
+  el.innerHTML = `
+    <div class="profile-stats">
+      <div><strong>${viewings.length}</strong><span>Viewings booked</span></div>
+      <div><strong>${visited.length}</strong><span>Viewings done</span></div>
+      <div><strong>${rooms.length}</strong><span>Room bookings</span></div>
+    </div>
+    ${viewings.length ? `<h3 class="profile-h">Hostels you've viewed</h3>
+      <ul class="profile-list">${viewings.map((b) => `<li><strong>${escapeHtml(b.hostel)}</strong><span>${escapeHtml(b.moveInDate)}${b.moveInDate < today ? ' · done' : ' · coming up'}</span></li>`).join('')}</ul>` : ''}
+    ${rooms.length ? `<h3 class="profile-h">Hostels you've booked</h3>
+      <ul class="profile-list">${rooms.map((b) => `<li><strong>${escapeHtml(b.hostel)}</strong><span>${escapeHtml(b.roomType)} · ${escapeHtml(b.bookedAt)}</span></li>`).join('')}</ul>` : ''}
+    ${(!viewings.length && !rooms.length) ? '<p class="table__muted-note">Nothing yet — your viewings and bookings will show here.</p>' : ''}`;
+}
+
+async function saveProfile(e) {
+  e.preventDefault();
+  const client = getCurrentClient();
+  const msg = document.getElementById('profMsg');
+  const btn = document.getElementById('profSaveBtn');
+  const fullName = document.getElementById('profName').value.trim();
+  const phone = document.getElementById('profPhone').value.trim();
+  if (!fullName || !phone) { msg.textContent = 'Please fill in your name and phone number.'; return; }
+  btn.disabled = true; msg.textContent = 'Saving…';
+  try {
+    await updateDoc(doc(db, 'users', client.id), { fullName, phone });
+    client.fullName = fullName; client.phone = phone;
+    const welcome = document.getElementById('welcomeName');
+    if (welcome) welcome.textContent = 'Hi, ' + fullName.split(' ')[0];
+    msg.textContent = 'Saved ✓';
+  } catch (err) {
+    console.error('Profile save failed:', err);
+    msg.textContent = 'Could not save (' + (err.code || err.message) + ').';
+  }
+  btn.disabled = false;
 }
 
 /* ---------------------------------------------------------
@@ -743,6 +840,7 @@ function startLiveSync() {
     renderCampusFilterChips();
     renderHostelGrid(currentSearch());
     renderMyBookings();
+    renderProfile();
   }
 
   onSnapshot(collection(db, HOSTELS_COLLECTION), (snap) => {
@@ -783,5 +881,9 @@ export function initClientPortal() {
 }
 
 window.renderHostelGrid = renderHostelGrid;
+function openProfile() { renderProfile(); document.getElementById('profileModal').style.display = 'flex'; }
+function closeProfile() { document.getElementById('profileModal').style.display = 'none'; }
+window.openProfile = openProfile;
+window.closeProfile = closeProfile;
 window.closeRoomModal = closeRoomModal;
 window.initLightbox = initLightbox;

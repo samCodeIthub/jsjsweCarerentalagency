@@ -910,6 +910,7 @@ function renderCurrentPage() {
   renderBookingsPage();
   renderStudentsPage();
   renderNotifications();
+  renderCalendar();
 }
 
 /* ---------------------------------------------------------
@@ -974,6 +975,114 @@ function initNotifications() {
       dropdown.hidden = true;
     }
   });
+}
+
+/* ---------------------------------------------------------
+   Viewing calendar — small calendar button in the header.
+   Shows which days have hostel viewings, and who is coming.
+--------------------------------------------------------- */
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let calSelected = null;
+
+function calIso(y, m, d) {
+  return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+function calWhatsappLink(phone) {
+  let n = String(phone || '').replace(/\D/g, '');
+  if (!n) return '';
+  if (n.startsWith('0')) n = '233' + n.slice(1);
+  return 'https://wa.me/' + n;
+}
+function calViewingsByDate() {
+  const map = {};
+  getBookings().forEach((b) => {
+    if (b.type !== 'viewing' || b.status === 'cancelled' || !b.moveInDate) return;
+    (map[b.moveInDate] = map[b.moveInDate] || []).push(b);
+  });
+  return map;
+}
+
+function renderCalendar() {
+  const dropdown = document.getElementById('calendarDropdown');
+  const dot = document.getElementById('calendarDot');
+  if (!dropdown) return;
+
+  const map = calViewingsByDate();
+  const todayIso = calIso(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  if (dot) dot.hidden = !Object.keys(map).some((d) => d >= todayIso);
+
+  if (!calSelected) {
+    const upcoming = Object.keys(map).filter((d) => d >= todayIso).sort();
+    calSelected = upcoming[0] || todayIso;
+  }
+
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  const monthName = calMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const firstDow = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+  let cells = '';
+  for (let i = 0; i < firstDow; i++) cells += '<span class="cal__cell cal__cell--empty"></span>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = calIso(y, m, d);
+    const count = (map[iso] || []).length;
+    const cls = ['cal__cell'];
+    if (count) cls.push('cal__cell--has');
+    if (iso === todayIso) cls.push('cal__cell--today');
+    if (iso === calSelected) cls.push('cal__cell--selected');
+    cells += '<button type="button" class="' + cls.join(' ') + '" data-date="' + iso + '">' + d +
+      (count ? '<span class="cal__badge">' + count + '</span>' : '') + '</button>';
+  }
+
+  const people = (map[calSelected] || []);
+  const nice = new Date(calSelected + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const listHtml = people.length === 0
+    ? '<p class="notifications-dropdown__empty">No viewings on this day.</p>'
+    : people.map((b) => {
+        const wa = calWhatsappLink(b.phone);
+        return '<div class="notification-item">' +
+          '<div class="notification-item__row"><span class="notification-item__title">' + escapeHtml(b.studentName) + '</span></div>' +
+          '<p class="notification-item__meta">' + escapeHtml(b.hostel) + ' · ' + escapeHtml(b.phone || 'no phone') + '</p>' +
+          (b.phone ? '<p class="cal__actions"><a class="cal__link" href="tel:' + escapeHtml(b.phone) + '">Call</a>' +
+            (wa ? '<a class="cal__link" target="_blank" rel="noopener" href="' + wa + '">WhatsApp</a>' : '') + '</p>' : '') +
+          '</div>';
+      }).join('');
+
+  dropdown.innerHTML =
+    '<div class="cal__head"><button type="button" class="cal__nav" data-cal="prev" aria-label="Previous month">&#10094;</button>' +
+    '<strong>' + monthName + '</strong>' +
+    '<button type="button" class="cal__nav" data-cal="next" aria-label="Next month">&#10095;</button></div>' +
+    '<div class="cal__dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>' +
+    '<div class="cal__grid">' + cells + '</div>' +
+    '<p class="notifications-dropdown__header">' + nice + ' — ' + people.length + (people.length === 1 ? ' person' : ' people') + ' coming</p>' +
+    listHtml;
+}
+
+function initCalendar() {
+  const btn = document.getElementById('calendarBtn');
+  const dropdown = document.getElementById('calendarDropdown');
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.hidden = !dropdown.hidden;
+    if (!dropdown.hidden) renderCalendar();
+  });
+  dropdown.addEventListener('click', (e) => {
+    const nav = e.target.closest('[data-cal]');
+    const day = e.target.closest('[data-date]');
+    if (nav) {
+      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (nav.dataset.cal === 'next' ? 1 : -1), 1);
+      renderCalendar();
+    } else if (day) {
+      calSelected = day.dataset.date;
+      renderCalendar();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!dropdown.hidden && !dropdown.contains(e.target) && !btn.contains(e.target)) dropdown.hidden = true;
+  });
+  renderCalendar();
 }
 
 /* ---------------------------------------------------------
@@ -1714,6 +1823,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initBookingsFilters();
   initStudentsFilters();
   initNotifications();
+  initCalendar();
 
   await seedDataIfEmpty();
   startLiveSync();

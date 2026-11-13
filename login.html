@@ -13,19 +13,14 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="client-styles.css">
     <script type="module" src="firebase-config.js"></script>
+  <link rel="icon" type="image/svg+xml" href="logo-mark.svg">
 </head>
 
 <body class="client-auth-body">
 
     <div class="client-auth">
         <div class="client-auth__brand">
-            <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true">
-                <path
-                    d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z"
-                    fill="currentColor" />
-                <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C" />
-                <circle cx="108" cy="128" r="4.5" fill="#FF7A59" />
-            </svg>
+            <img class="brand__mark" src="logo-mark.svg" alt="">
             <span class="brand__name">we<b>Care</b></span>
         </div>
 
@@ -100,6 +95,7 @@
     </div>
 
     <script type="module" src="login.js"></script>
+    <script>try{sessionStorage.removeItem("wecareIntroSeen")}catch(e){}</script>
 </body>
 
 </html>

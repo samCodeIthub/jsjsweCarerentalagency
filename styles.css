@@ -1369,3 +1369,24 @@ svg {
   color: var(--red);
 }
 
+
+/* ---- Viewing calendar ---- */
+.cal { width: 320px; }
+.cal__head { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 10px; color: var(--ink); font-size: 14px; }
+.cal__nav { border: 0; background: transparent; cursor: pointer; font-size: 14px; color: var(--ink); padding: 6px 10px; border-radius: 8px; }
+.cal__nav:hover { background: var(--border); }
+.cal__dow, .cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.cal__dow span { font-size: 11px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+.cal__cell { position: relative; border: 0; background: transparent; height: 38px; border-radius: 10px; font: 500 13px inherit; font-family: inherit; color: var(--ink); cursor: pointer; }
+.cal__cell:hover { background: var(--border); }
+.cal__cell--empty { pointer-events: none; }
+.cal__cell--today { outline: 1.5px solid var(--teal, #0E7A6B); }
+.cal__cell--has { background: #DDF1EA; font-weight: 700; }
+.cal__cell--selected { background: var(--teal, #0E7A6B); color: #fff; }
+.cal__badge { position: absolute; top: 1px; right: 3px; min-width: 15px; height: 15px; line-height: 15px; border-radius: 8px; background: var(--coral); color: #fff; font-size: 10px; font-weight: 700; padding: 0 3px; }
+.cal__actions { display: flex; gap: 8px; margin-top: 6px; }
+.cal__link { font-size: 12px; font-weight: 600; text-decoration: none; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--teal, #0E7A6B); color: var(--teal, #0E7A6B); }
+.cal__link:hover { background: #DDF1EA; }
+
+/* brand sub-title */
+.brand__name::after{content:"RENTAL AGENCY";display:block;font:600 .5rem var(--font-display);letter-spacing:.22em;color:var(--muted);margin-top:1px}

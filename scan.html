@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scan QR · weCare Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="firebase-config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="logo-mark.svg">
+  <style>
+    .scan-wrap{max-width:520px;margin:0 auto;padding:20px 16px 40px;display:grid;gap:16px}
+    .scan-video{position:relative;border-radius:18px;overflow:hidden;background:#000;aspect-ratio:1/1}
+    .scan-video video{width:100%;height:100%;object-fit:cover}
+    .scan-video::after{content:"";position:absolute;inset:18%;border:3px solid rgba(255,255,255,.85);border-radius:16px;pointer-events:none}
+    .scan-manual{display:flex;gap:8px}
+    .scan-manual input{flex:1;padding:11px 14px;border:1px solid var(--border);border-radius:10px;font:500 15px var(--font-body);background:var(--surface);color:var(--ink);text-transform:uppercase}
+    .scan-result{border-radius:18px;padding:20px;display:none}
+    .scan-result h2{font-size:1.3rem;margin-bottom:10px}
+    .scan-result p{margin:4px 0;font-size:15px}
+    .scan-result--ok{background:#DDF5E6;color:#0B4A2A;border:2px solid #25A25A}
+    .scan-result--warn{background:#FBEBC9;color:#6B4A0B;border:2px solid #E0A519}
+    .scan-result--bad{background:#F9DDE0;color:#8A1F32;border:2px solid #D1495B}
+    .scan-result .btn{margin-top:14px}
+    .scan-top{display:flex;align-items:center;gap:12px;padding:16px;background:var(--surface);border-bottom:1px solid var(--border)}
+    .scan-top h1{font-size:1.1rem;flex:1}
+  </style>
+</head>
+<body>
+  <header class="scan-top topbar" style="padding:16px">
+    <a class="btn btn--ghost" href="bookings.html">&larr; Back</a>
+    <h1>Scan booking QR</h1>
+    <div class="topbar__actions"></div>
+  </header>
+  <main class="scan-wrap">
+    <div class="scan-video" id="videoBox" hidden><video id="cam" playsinline muted></video></div>
+    <button class="btn btn--primary" id="camBtn" type="button">Start camera &amp; scan</button>
+    <div class="scan-manual">
+      <input id="manualCode" placeholder="Or type batch no. e.g. WC-4X9K2P">
+      <button class="btn btn--ghost" id="manualBtn" type="button">Check</button>
+    </div>
+    <div class="scan-result" id="result"></div>
+  </main>
+
+  <script type="module">
+    import { requireAdmin } from './auth-guard.js';
+    import { db } from './firebase-config.js';
+    import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+    requireAdmin();
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let stream = null, scanning = false, lastCode = '';
+
+    function show(kind, html) {
+      const r = $('result');
+      r.className = 'scan-result scan-result--' + kind;
+      r.style.display = 'block';
+      r.innerHTML = html;
+    }
+
+    async function lookup(raw) {
+      const m = String(raw).toUpperCase().match(/WC-[A-Z0-9]+/);
+      if (!m) { show('bad', '<h2>✗ Not a weCare code</h2><p>This QR is not from weCare.</p>'); return; }
+      const code = m[0];
+      show('warn', '<h2>Checking ' + esc(code) + '…</h2>');
+      try {
+        const snap = await getDocs(query(collection(db, 'bookings'), where('batchNumber', '==', code)));
+        if (snap.empty) { show('bad', '<h2>✗ Not found</h2><p>No booking with code ' + esc(code) + '. Do not accept.</p>'); return; }
+        const d = snap.docs[0]; const b = d.data();
+        const isViewing = b.type === 'viewing';
+        const details = '<p><strong>' + esc(b.studentName) + '</strong></p>' +
+          '<p>📞 ' + esc(b.phone || '—') + '</p>' +
+          '<p>' + esc(b.hostel) + ' · ' + esc(b.roomType) + '</p>' +
+          (isViewing ? '<p>Viewing date: ' + esc(b.moveInDate) + '</p>' : (b.moveInDate ? '<p>Stay: ' + esc(b.moveInDate) + ' → ' + esc(b.moveOutDate) + '</p>' : '')) +
+          '<p>GHS ' + Number(b.price || 0).toLocaleString() + ' · ' + esc(code) + '</p>';
+        if (b.status === 'cancelled') { show('bad', '<h2>✗ Cancelled</h2>' + details); return; }
+        if (b.status === 'pending') { show('warn', '<h2>⚠ Payment not completed</h2>' + details); return; }
+        if (b.checkedIn) { show('warn', '<h2>⚠ Already checked in</h2>' + details); return; }
+        show('ok', '<h2>✓ Valid booking</h2>' + details + '<button class="btn btn--primary" id="checkInBtn" type="button">Check in now</button>');
+        $('checkInBtn').addEventListener('click', async (e) => {
+          e.target.disabled = true; e.target.textContent = 'Saving…';
+          try {
+            await updateDoc(doc(db, 'bookings', d.id), { checkedIn: true });
+            show('ok', '<h2>✓ Checked in</h2>' + details);
+          } catch (err) { alert('Could not check in (' + (err.code || err.message) + ')'); e.target.disabled = false; e.target.textContent = 'Check in now'; }
+        });
+      } catch (err) {
+        show('bad', '<h2>Error</h2><p>' + esc(err.code || err.message) + '</p>');
+      }
+    }
+
+    function tick() {
+      if (!scanning) return;
+      const v = $('cam');
+      if (v.readyState === v.HAVE_ENOUGH_DATA) {
+        const c = document.createElement('canvas');
+        c.width = v.videoWidth; c.height = v.videoHeight;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+        const img = ctx.getImageData(0, 0, c.width, c.height);
+        const res = window.jsQR && jsQR(img.data, img.width, img.height);
+        if (res && res.data && res.data !== lastCode) {
+          lastCode = res.data;
+          if (navigator.vibrate) navigator.vibrate(80);
+          lookup(res.data);
+          setTimeout(() => { lastCode = ''; }, 4000);
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    $('camBtn').addEventListener('click', async () => {
+      if (scanning) {
+        scanning = false; stream && stream.getTracks().forEach((t) => t.stop());
+        $('videoBox').hidden = true; $('camBtn').textContent = 'Start camera & scan'; return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        $('cam').srcObject = stream; await $('cam').play();
+        $('videoBox').hidden = false; $('camBtn').textContent = 'Stop camera';
+        scanning = true; tick();
+      } catch (err) {
+        show('bad', '<h2>Camera blocked</h2><p>Allow camera access in your browser, or type the batch number below. (Camera needs https or localhost.)</p>');
+      }
+    });
+    $('manualBtn').addEventListener('click', () => { const v = $('manualCode').value.trim(); if (v) lookup(v); });
+    $('manualCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('manualBtn').click(); });
+  </script>
+  <script src="site-extras.js"></script>
+</body>
+</html>
