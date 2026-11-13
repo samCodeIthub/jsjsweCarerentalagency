@@ -9,13 +9,13 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 /**
- * Call this at the top of admin pages (index.html, hostels.html, etc.)
+ * Call this at the top of admin pages (dashboard.html, hostels.html, etc.)
  * Redirects to login.html if not logged in, or if logged in as a client.
  */
 function requireAdmin() {
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
-      window.location.href = 'login.html';
+      window.location.href = 'index.html';
       return;
     }
     const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -69,4 +69,23 @@ function logoutUser() {
   });
 }
 
-export { requireAdmin, requireClient, requirePartner, logoutUser };
+/**
+ * For pages shared by admins AND hostel managers (the QR scanner).
+ * Resolves to { role, hostel } or sends the person to the home page.
+ */
+function requireStaff() {
+  return new Promise((resolve) => {
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { window.location.href = 'index.html'; return; }
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const data = userDoc.exists() ? userDoc.data() : null;
+      if (!data || (data.role !== 'admin' && data.role !== 'partner')) {
+        window.location.href = 'login.html';
+        return;
+      }
+      resolve({ role: data.role, hostel: data.hostel || '' });
+    });
+  });
+}
+
+export { requireAdmin, requireClient, requirePartner, requireStaff, logoutUser };

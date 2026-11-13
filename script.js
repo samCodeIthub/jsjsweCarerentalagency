@@ -15,7 +15,7 @@
 
 import { db } from './firebase-config.js';
 import {
-  collection, doc, getDoc, setDoc, getDocs, writeBatch, onSnapshot, deleteDoc,
+  collection, doc, getDoc, setDoc, getDocs, writeBatch, onSnapshot, deleteDoc, runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const META_COLLECTION = 'meta';
@@ -161,7 +161,9 @@ function startLiveSync() {
     bookingsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     cachesReady.bookings = true;
     maybeRender();
+    sweepExpiredHolds();
   });
+  setInterval(sweepExpiredHolds, 60 * 1000);
   onSnapshot(doc(db, SETTINGS_COLLECTION, PAYMENT_SETTINGS_DOC), (snap) => {
     if (snap.exists()) paymentSettingsCache = { ...paymentSettingsCache, ...snap.data() };
     renderPaymentSettingsForm();
@@ -186,7 +188,11 @@ function generateBatchNumber() {
 // whatever commission rule is set on that hostel at the moment
 // of booking. The split is stored on the booking itself so it
 // stays accurate even if the hostel's rate changes later.
-function computeRevenueSplit(price, hostel) {
+function computeRevenueSplit(price, hostel, room) {
+  if (room && room.ownerPrice != null) {
+    const owner = Math.max(0, Math.min(Number(room.ownerPrice) || 0, price));
+    return { companyCut: price - owner, ownerPayout: owner };
+  }
   const type = hostel?.commissionType || 'fixed';
   const value = Number(hostel?.commissionValue) || 0;
 
@@ -210,7 +216,7 @@ function bookRoom(roomId, studentName, moveInDate) {
 
   const hostels = getHostels();
   const hostelObj = hostels.find((h) => h.name === room.hostel);
-  const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj);
+  const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj, room);
   const moveOutDate = hostelObj?.moveOutDate || '';
 
   const bookings = getBookings();
@@ -218,7 +224,7 @@ function bookRoom(roomId, studentName, moveInDate) {
     id: makeId(),
     roomId: room.id,
     hostel: room.hostel,
-    roomType: room.capacity === '1' ? '1-in-a-Room' : `${room.capacity}-in-a-Room`,
+    roomType: room.unitName || (room.capacity === '1' ? '1-in-a-Room' : `${room.capacity}-in-a-Room`),
     capacity: room.capacity,
     price: room.price,
     companyCut,
@@ -400,7 +406,7 @@ function renderDashboard() {
 
 function dashboardRowHtml(room) {
   const st = roomStatus(room);
-  const capacityLabel = `${room.capacity}-in-a-room`;
+  const capacityLabel = room.unitName || `${room.capacity}-in-a-room`;
   const studentsLabel = room.capacity === '1' ? '1 student' : `${room.capacity} students`;
 
   return `
@@ -587,7 +593,7 @@ function roomCardHtml(room) {
   const beds = Number(room.beds) || 0;
   const filled = Number(room.filled) || 0;
   const pct = beds ? Math.round((filled / beds) * 100) : 0;
-  const title = room.capacity === '1' ? '1-in-a-Room · Private' : `${room.capacity}-in-a-Room · Shared`;
+  const title = room.unitName || (room.capacity === '1' ? '1-in-a-Room · Private' : `${room.capacity}-in-a-Room · Shared`);
   const isFull = st.key === 'full';
 
   const photosHtml = room.photoURLs?.length
@@ -603,12 +609,12 @@ function roomCardHtml(room) {
         <span class="room-card__cap">${room.capacity} / room</span>
       </div>
       <h3>${title}</h3>
-      <p class="room-card__hostel">${escapeHtml(room.hostel)}</p>
+      <p class="room-card__hostel">${escapeHtml(room.hostel)}${room.ownerPrice != null ? ` · <em>added by manager (their price GHS ${Number(room.ownerPrice).toLocaleString('en-US')} + GHS 200)</em>` : ''}</p>
       <div class="room-card__occupancy">
         <div class="room-card__bar ${st.barClass}"><span style="width:${pct}%"></span></div>
         <p>${filled} / ${beds} beds filled</p>
       </div>
-      <p class="room-card__price">GHS ${Number(room.price).toLocaleString('en-US')} <span>/ semester</span></p>
+      <p class="room-card__price">GHS ${Number(room.price).toLocaleString('en-US')} <span>/ ${escapeHtml(room.pricePeriod || 'semester')}</span></p>
       <div class="room-card__actions-row">
         <button class="link-btn link-btn--book" type="button" data-action="book" ${isFull ? 'disabled' : ''}>
           ${isFull ? 'Fully Booked' : '+ Book a Bed'}
@@ -690,7 +696,7 @@ function renderBookingsPage() {
     const available = rooms.filter((r) => Number(r.filled) < Number(r.beds));
     roomSelect.innerHTML = available.length
       ? available.map((r) => {
-        const label = `${r.hostel} — ${r.capacity}-in-a-Room (${r.beds - r.filled} left)`;
+        const label = `${r.hostel} — ${r.unitName || (r.capacity + '-in-a-Room')} (${r.beds - r.filled} left)`;
         return `<option value="${r.id}">${escapeHtml(label)}</option>`;
       }).join('')
       : `<option value="">No rooms with open beds</option>`;
@@ -1086,6 +1092,35 @@ function initCalendar() {
 }
 
 /* ---------------------------------------------------------
+   Unpaid room holds last 10 minutes. This frees any bed whose
+   hold ran out (the admin panel does it too, as a backup to
+   the student side).
+--------------------------------------------------------- */
+let sweepingHolds = false;
+async function sweepExpiredHolds() {
+  if (sweepingHolds) return;
+  sweepingHolds = true;
+  try {
+    const now = Date.now();
+    const expired = bookingsCache.filter((b) =>
+      b.status === 'pending' && b.type !== 'viewing' && b.roomId && Number(b.holdExpiresAt) < now);
+    for (const b of expired) {
+      try {
+        await runTransaction(db, async (tx) => {
+          const bRef = doc(db, BOOKINGS_COLLECTION, b.id);
+          const snap = await tx.get(bRef);
+          if (!snap.exists() || snap.data().status !== 'pending' || !(Number(snap.data().holdExpiresAt) < Date.now())) return;
+          const rRef = doc(db, ROOMS_COLLECTION, b.roomId);
+          const room = await tx.get(rRef);
+          if (room.exists()) tx.update(rRef, { filled: Math.max(0, Number(room.data().filled) - 1) });
+          tx.delete(bRef);
+        });
+      } catch (e) { console.warn('Could not release hold', b.id, e.code || e.message); }
+    }
+  } finally { sweepingHolds = false; }
+}
+
+/* ---------------------------------------------------------
    Mobile sidebar (hamburger menu + scrim)
 --------------------------------------------------------- */
 function initSidebar() {
@@ -1216,6 +1251,7 @@ function initAddHostelForm() {
     const moveOutDate = form.hostelMoveOutDate.value;
     const mapLink = form.hostelMapLink ? form.hostelMapLink.value.trim() : '';
     const paystackSubaccount = form.hostelPaystackSubaccount ? form.hostelPaystackSubaccount.value.trim() : '';
+    const category = form.hostelCategory ? form.hostelCategory.value : 'hostel';
     const campus = form.querySelector('input[name="hostelCampus"]:checked')?.value || '';
     const photoFile = form.hostelPhoto?.files?.[0] || null;
 
@@ -1256,6 +1292,7 @@ function initAddHostelForm() {
         hostel.mapLink = mapLink;
         hostel.paystackSubaccount = paystackSubaccount;
         hostel.campus = campus;
+        hostel.category = category;
         // Keep the existing photo unless a new one was chosen.
         if (photoFile) {
           const uploaded = await safeUploadPhoto(hostel.id);
@@ -1281,7 +1318,7 @@ function initAddHostelForm() {
 
     const newId = makeId();
     const photoURL = await safeUploadPhoto(newId);
-    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, mapLink, paystackSubaccount, campus, photoURL });
+    hostels.unshift({ id: newId, name, location, status, commissionType, commissionValue, moveOutDate, mapLink, paystackSubaccount, campus, category, photoURL });
     setHostels(hostels);
 
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
@@ -1316,6 +1353,7 @@ function startEditingHostel(hostelId) {
   if (form.hostelMoveOutDate) form.hostelMoveOutDate.value = hostel.moveOutDate || '';
   if (form.hostelMapLink) form.hostelMapLink.value = hostel.mapLink || '';
   if (form.hostelPaystackSubaccount) form.hostelPaystackSubaccount.value = hostel.paystackSubaccount || '';
+  if (form.hostelCategory) form.hostelCategory.value = hostel.category || 'hostel';
   const campusRadio = form.querySelector(`input[name="hostelCampus"][value="${hostel.campus || ''}"]`);
   form.querySelectorAll('input[name="hostelCampus"]').forEach((r) => { r.checked = false; });
   if (campusRadio) campusRadio.checked = true;
@@ -1480,6 +1518,8 @@ function initAddRoomForm() {
 
     const hostel = form.roomHostel.value;
     const capacity = form.roomCapacity.value;
+    const unitName = form.roomUnitName ? form.roomUnitName.value.trim() : '';
+    const pricePeriod = form.roomPricePeriod ? form.roomPricePeriod.value : 'semester';
     const price = form.roomPrice.value.trim();
     const beds = form.roomBeds.value.trim();
     const photoFiles = form.roomPhotos?.files || [];
@@ -1512,6 +1552,8 @@ function initAddRoomForm() {
       id: newId,
       hostel,
       capacity,
+      unitName,
+      pricePeriod,
       price: Number(price),
       beds: Number(beds),
       filled: 0,

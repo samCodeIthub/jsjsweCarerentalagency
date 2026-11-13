@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Partner Portal · weCare</title>
+    <title>Hostel Manager · weCare</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3">
     <script type="module" src="firebase-config.js"></script>
   <link rel="icon" type="image/svg+xml" href="logo-mark.svg">
 </head>
@@ -21,17 +21,11 @@
 
         <header class="topbar">
             <div class="brand" style="margin-right: 8px;">
-                <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true" style="color: var(--teal);">
-                    <path
-                        d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z"
-                        fill="currentColor" />
-                    <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C" />
-                    <circle cx="108" cy="128" r="4.5" fill="#FF7A59" />
-                </svg>
+                <img class="brand__mark brand__mark--logo" src="logo-mark.svg" alt="">
             </div>
             <div class="topbar__title">
                 <h1 id="partnerHostelName">Your Hostel</h1>
-                <p id="welcomeName">Partner dashboard</p>
+                <p id="welcomeName">Hostel manager dashboard</p>
             </div>
             <div class="topbar__actions">
                 <button class="btn btn--ghost" id="logoutBtn" type="button">Log Out</button>
@@ -40,13 +34,13 @@
 
         <main class="content">
 
-            <section class="stats" aria-label="Partner overview">
+            <section class="stats" aria-label="Hostel manager overview">
                 <article class="stat-card stat-card--teal">
-                    <p class="stat-card__label">Total Bookings</p>
+                    <p class="stat-card__label">Paid Bookings</p>
                     <p class="stat-card__value" id="statPartnerTotal">0</p>
                 </article>
                 <article class="stat-card stat-card--amber">
-                    <p class="stat-card__label">Awaiting Payment</p>
+                    <p class="stat-card__label">Waiting to Check In</p>
                     <p class="stat-card__value" id="statPartnerPending">0</p>
                 </article>
                 <article class="stat-card stat-card--teal">
@@ -61,8 +55,11 @@
 
             <section class="panel">
                 <div class="panel__header">
-                    <h2>Your bookings</h2>
-                    <button class="btn btn--primary" type="button" id="printPaidBtn">Print Paid Students</button>
+                    <h2>Paid students</h2>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                        <a class="btn btn--primary" href="scan.html">Scan QR</a>
+                        <button class="btn btn--ghost" type="button" id="printPaidBtn">Print Paid Students</button>
+                    </div>
                 </div>
                 <div class="table-scroll">
                     <table class="table">
@@ -75,6 +72,7 @@
                                 <th scope="col">Your Payout</th>
                                 <th scope="col">Date</th>
                                 <th scope="col">Status</th>
+                                <th scope="col">Check-in</th>
                             </tr>
                         </thead>
                         <tbody id="partnerBookingsBody">
@@ -84,10 +82,55 @@
                 </div>
             </section>
 
+            <section class="panel" id="my-rooms">
+                <div class="panel__header">
+                    <h2>My rooms</h2>
+                </div>
+                <form class="hostel-form" id="mgrRoomForm" style="padding:0 20px 20px">
+                    <div class="hostel-form__grid">
+                        <div class="field">
+                            <label for="mrCapacity">Capacity</label>
+                            <select id="mrCapacity">
+                                <option value="1">1 student / room (Private)</option>
+                                <option value="2" selected>2 students / room (Shared)</option>
+                                <option value="4">4 students / room (Shared)</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="mrUnitName">Unit name (optional, for apartments)</label>
+                            <input type="text" id="mrUnitName" placeholder="e.g. 2-Bedroom Self-Contained">
+                        </div>
+                        <div class="field">
+                            <label for="mrPeriod">Price is charged per</label>
+                            <select id="mrPeriod">
+                                <option value="semester" selected>Semester</option>
+                                <option value="month">Month</option>
+                                <option value="year">Year</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="mrPrice">Your price (GHS)</label>
+                            <input type="number" id="mrPrice" min="1" step="10" placeholder="e.g. 1500">
+                            <small id="mrPreview" style="color:#666">Students will see: GHS 200 more than your price.</small>
+                        </div>
+                        <div class="field">
+                            <label for="mrBeds">How many rooms / units</label>
+                            <input type="number" id="mrBeds" min="1" placeholder="e.g. 10">
+                        </div>
+                        <div class="field field--wide">
+                            <label for="mrPhotos">Photos (bedroom, kitchen, washroom...)</label>
+                            <input type="file" id="mrPhotos" accept="image/*" capture="environment" multiple>
+                        </div>
+                    </div>
+                    <button class="btn btn--primary" type="submit" id="mrSubmit">Put room up</button>
+                </form>
+                <div class="room-grid" id="mgrRoomGrid" style="padding:0 20px 20px"></div>
+            </section>
+
         </main>
 
         <footer class="page-footer">
-            <p>weCare Rental Agency · Partner Portal</p>
+            <p>weCare Rental Agency · Hostel Manager Portal</p>
         </footer>
     </div>
 

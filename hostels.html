@@ -10,7 +10,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3">
     <script type="module" src="firebase-config.js"></script>
   <link rel="icon" type="image/svg+xml" href="logo-mark.svg">
 </head>
@@ -22,19 +22,13 @@
         <!-- ============ SIDEBAR ============ -->
         <aside class="sidebar" id="sidebar">
             <div class="brand">
-                <svg class="brand__mark" viewBox="0 0 220 230" aria-hidden="true">
-                    <path
-                        d="M100,50 C 78,10 15,25 15,78 C 15,125 65,155 100,190 C 135,155 185,125 185,78 C 185,25 122,10 100,50 Z"
-                        fill="currentColor" />
-                    <path d="M82,150 L82,112 C82,97 118,97 118,112 L118,150 Z" fill="#0B5D4C" />
-                    <circle cx="108" cy="128" r="4.5" fill="#FF7A59" />
-                </svg>
+                <img class="brand__mark brand__mark--logo" src="logo-mark.svg" alt="">
                 <span class="brand__name">we<b>Care</b></span>
             </div>
             <p class="sidebar__label">Admin Panel</p>
 
             <nav class="nav" aria-label="Admin navigation">
-                <a class="nav__link" href="index.html">
+                <a class="nav__link" href="dashboard.html">
                     <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
                         <rect x="3" y="3" width="7" height="9" rx="1.5" />
                         <rect x="14" y="3" width="7" height="5" rx="1.5" />
@@ -89,7 +83,7 @@
                         <circle cx="9" cy="8" r="4" />
                         <path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2" />
                     </svg>
-                    Partners
+                    Hostel Managers
                 </a>
                 <!-- <a class="nav__link" href="#">
                     <svg class="nav__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -172,7 +166,7 @@
 
                 <!-- Breadcrumb -->
                 <nav class="breadcrumb" aria-label="Breadcrumb">
-                    <a href="index.html">Dashboard</a>
+                    <a href="dashboard.html">Dashboard</a>
                     <span aria-hidden="true">/</span>
                     <span aria-current="page">Hostels</span>
                 </nav>
@@ -219,6 +213,13 @@
                                 <label for="hostelMapLink">Google Maps link (optional)</label>
                                 <input type="url" id="hostelMapLink" name="hostelMapLink"
                                     placeholder="Paste the Google Maps link for this hostel">
+                            </div>
+                            <div class="field">
+                                <label for="hostelCategory">Type</label>
+                                <select id="hostelCategory" name="hostelCategory">
+                                    <option value="hostel" selected>Hostel (for students)</option>
+                                    <option value="apartment">Apartment (working people &amp; families)</option>
+                                </select>
                             </div>
                             <div class="field field--wide">
                                 <label>Nearest campus (used for the location filter)</label>

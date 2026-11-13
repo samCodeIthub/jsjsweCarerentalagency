@@ -1390,3 +1390,21 @@ svg {
 
 /* brand sub-title */
 .brand__name::after{content:"RENTAL AGENCY";display:block;font:600 .5rem var(--font-display);letter-spacing:.22em;color:var(--muted);margin-top:1px}
+
+/* Phone: dropdowns (calendar + notifications) sit centered on screen */
+@media (max-width: 700px) {
+  .notifications-dropdown,
+  .notifications-dropdown.cal {
+    position: fixed;
+    top: 76px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(92vw, 360px);
+    max-height: calc(100vh - 100px);
+  }
+}
+
+/* New logo image in sidebar / partner header */
+.brand__mark--logo { width: 50px; height: 38px; object-fit: contain; background: #fff; border-radius: 10px; padding: 4px 5px; }
+.sidebar .brand__name::after { color: #A8DCCB; }

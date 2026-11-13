@@ -9,7 +9,7 @@ import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
   doc, getDoc, updateDoc, collection, onSnapshot,
-  writeBatch, deleteDoc,
+  writeBatch, deleteDoc, runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 // =========================================================
@@ -34,6 +34,13 @@ let bookingsCache = [];
 let paymentSettingsCache = { momoNetwork: 'MTN Mobile Money', momoNumber: '', momoName: '' };
 const cachesReady = { hostels: false, rooms: false, bookings: false };
 let activeCampusFilter = '';
+// 'all' | 'hostel' | 'apartment' — set from the landing page choice
+let activeCategory = (() => {
+  try {
+    const t = sessionStorage.getItem('wecareType');
+    return t === 'apartments' ? 'apartment' : t === 'hostels' ? 'hostel' : 'all';
+  } catch (e) { return 'all'; }
+})();
 
 // UEW's three campuses in Winneba, with their real map coordinates —
 // used so "North Campus" etc. can rank hostels by actual distance.
@@ -107,12 +114,57 @@ async function updateBookingDoc(bookingId, changes) {
 // undoes the bed hold and removes the never-paid booking record,
 // so nothing is left cluttering the lists for a payment that
 // never happened.
-async function releaseUnpaidBooking(booking) {
-  if (booking.roomId) {
-    const room = getRooms().find((r) => r.id === booking.roomId);
-    if (room) await updateRoomDoc(room.id, { filled: Math.max(0, Number(room.filled) - 1) });
-  }
-  await deleteDoc(doc(db, BOOKINGS_COLLECTION, booking.id));
+async function releaseUnpaidBooking(booking, onlyIfExpired) {
+  const bookingRef = doc(db, BOOKINGS_COLLECTION, booking.id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(bookingRef);
+    if (!snap.exists() || snap.data().status !== 'pending') return; // already confirmed or released
+    if (onlyIfExpired && !(Number(snap.data().holdExpiresAt) < Date.now())) return; // still being held
+    if (booking.roomId) {
+      const roomRef = doc(db, ROOMS_COLLECTION, booking.roomId);
+      const room = await tx.get(roomRef);
+      if (room.exists()) tx.update(roomRef, { filled: Math.max(0, Number(room.data().filled) - 1) });
+    }
+    tx.delete(bookingRef);
+  });
+}
+
+// Frees every unpaid booking whose 10-minute hold has run out.
+let sweeping = false;
+async function sweepExpiredHolds() {
+  if (sweeping) return;
+  sweeping = true;
+  try {
+    const now = Date.now();
+    const expired = getBookings().filter((b) =>
+      b.status === 'pending' && b.type !== 'viewing' && b.roomId && Number(b.holdExpiresAt) < now);
+    for (const b of expired) {
+      try { await releaseUnpaidBooking(b, true); } catch (e) { console.warn('Could not release hold', b.id, e.code || e.message); }
+    }
+  } finally { sweeping = false; }
+}
+
+// Called the moment Paystack says the payment worked. Normally this
+// just flips the booking to "confirmed". If the 10-minute hold ran
+// out while the student was paying, it tries to take a bed again;
+// if the room filled up in the meantime it tells the student to
+// contact weCare so the payment can be refunded.
+async function confirmPaidBooking(booking) {
+  const bookingRef = doc(db, BOOKINGS_COLLECTION, booking.id);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(bookingRef);
+    if (snap.exists()) {
+      if (snap.data().status !== 'confirmed') tx.update(bookingRef, { status: 'confirmed' });
+      return { ok: true };
+    }
+    const roomRef = doc(db, ROOMS_COLLECTION, booking.roomId);
+    const room = await tx.get(roomRef);
+    if (!room.exists() || Number(room.data().filled) >= Number(room.data().beds)) return { ok: false };
+    const { id, ...data } = booking;
+    tx.update(roomRef, { filled: Number(room.data().filled) + 1 });
+    tx.set(bookingRef, { ...data, status: 'confirmed' });
+    return { ok: true };
+  });
 }
 
 // Opens the Paystack checkout popup. Handles card, Mobile Money,
@@ -170,9 +222,11 @@ function payWithPaystack({ amountGHS, companyCutGHS, subaccountCode, email, refe
   try {
     const handler = window.PaystackPop.setup(options);
     handler.openIframe();
+    return handler;
   } catch (err) {
     console.error('Paystack could not open:', err);
     fail('The payment window could not open (' + (err && err.message ? err.message : 'unknown error') + '). Please try again.');
+    return null;
   }
 }
 
@@ -271,18 +325,31 @@ async function clientBookViewing(hostelId) {
 --------------------------------------------------------- */
 function generateBatchNumber() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const rnd = new Uint32Array(8);
+  crypto.getRandomValues(rnd);
   let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) code += chars[rnd[i] % chars.length];
   return `WC-${code}`;
 }
 
-function computeRevenueSplit(price, hostel) {
+function computeRevenueSplit(price, hostel, room) {
+  // Rooms put up by a hostel manager: weCare's cut is the fixed fee on top of their price.
+  if (room && room.ownerPrice != null) {
+    const owner = Math.max(0, Math.min(Number(room.ownerPrice) || 0, price));
+    return { companyCut: price - owner, ownerPayout: owner };
+  }
   const type = hostel?.commissionType || 'fixed';
   const value = Number(hostel?.commissionValue) || 0;
   let companyCut = type === 'percent' ? Math.round(price * (value / 100)) : value;
   companyCut = Math.max(0, Math.min(companyCut, price));
   return { companyCut, ownerPayout: price - companyCut };
 }
+
+const HOLD_MINUTES = 10;
+// The bed is released after 10 minutes, but a payment window that is
+// already open is given 2 more minutes so someone who is just approving
+// the Mobile Money prompt on their phone is not cut off.
+const HOLD_GRACE_SECONDS = 120;
 
 async function clientBookRoom(roomId, moveInDate) {
   const client = getCurrentClient();
@@ -293,17 +360,19 @@ async function clientBookRoom(roomId, moveInDate) {
 
   const room = getRooms().find((r) => r.id === roomId);
   if (!room) return { ok: false, message: 'That room type no longer exists.' };
-  if (Number(room.filled) >= Number(room.beds)) return { ok: false, message: 'This room type just filled up.' };
+  // Free any expired 10-minute holds first, then let the server-side
+  // transaction below make the real "is there a bed?" decision.
+  await sweepExpiredHolds();
 
   const hostelObj = getHostels().find((h) => h.name === room.hostel);
-  const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj);
+  const { companyCut, ownerPayout } = computeRevenueSplit(room.price, hostelObj, room);
   const moveOutDate = hostelObj?.moveOutDate || '';
 
   const booking = {
     id: makeId(),
     roomId: room.id,
     hostel: room.hostel,
-    roomType: room.capacity === '1' ? '1-in-a-Room' : `${room.capacity}-in-a-Room`,
+    roomType: room.unitName || (room.capacity === '1' ? '1-in-a-Room' : `${room.capacity}-in-a-Room`),
     capacity: room.capacity,
     price: room.price,
     companyCut,
@@ -320,11 +389,32 @@ async function clientBookRoom(roomId, moveInDate) {
     // flips to 'confirmed'; if the student closes the popup without
     // paying, releaseUnpaidBooking() frees the bed again.
     status: 'pending',
+    // The bed is only held for 10 minutes. After that anyone's browser
+    // (or the admin panel) frees it automatically.
+    holdExpiresAt: Date.now() + HOLD_MINUTES * 60 * 1000,
     checkedIn: false,
   };
 
-  await updateRoomDoc(room.id, { filled: Number(room.filled) + 1 });
-  await addBookingDoc(booking);
+  // ATOMIC: the bed count is re-read from the server and the bed is
+  // taken inside ONE transaction. If two students try for the last
+  // bed at the same moment, only one transaction can win — the other
+  // is told the room just filled up. No double bookings.
+  try {
+    await runTransaction(db, async (tx) => {
+      const roomRef = doc(db, ROOMS_COLLECTION, room.id);
+      const fresh = await tx.get(roomRef);
+      if (!fresh.exists()) throw new Error('ROOM_GONE');
+      const f = fresh.data();
+      if (Number(f.filled) >= Number(f.beds)) throw new Error('ROOM_FULL');
+      const { id, ...data } = booking;
+      tx.update(roomRef, { filled: Number(f.filled) + 1 });
+      tx.set(doc(db, BOOKINGS_COLLECTION, id), data);
+    });
+  } catch (err) {
+    if (err.message === 'ROOM_FULL') return { ok: false, message: 'Sorry — someone just booked the last bed in this room type. Please choose another.' };
+    if (err.message === 'ROOM_GONE') return { ok: false, message: 'That room type no longer exists.' };
+    throw err;
+  }
 
   return { ok: true, booking };
 }
@@ -334,6 +424,22 @@ async function clientBookRoom(roomId, moveInDate) {
    Clicking one also sorts the results, closest-first, using
    whatever Google Maps link the admin pasted for each hostel.
 --------------------------------------------------------- */
+function renderCategoryChips() {
+  const wrap = document.getElementById('categoryFilterChips');
+  if (!wrap) return;
+  const opts = [['all', 'All'], ['hostel', 'Hostels · for students'], ['apartment', 'Apartments · working people & families']];
+  wrap.innerHTML = opts.map(([key, label]) =>
+    `<button type="button" class="chip${activeCategory === key ? ' is-active' : ''}" data-cat="${key}">${label}</button>`).join('');
+  wrap.querySelectorAll('[data-cat]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeCategory = btn.dataset.cat;
+      renderCategoryChips();
+      renderHostelGrid(document.getElementById('hostelSearch')?.value || '');
+      renderAvailabilitySummary();
+    });
+  });
+}
+
 function renderCampusFilterChips() {
   const wrap = document.getElementById('locationFilterChips');
   if (!wrap) return;
@@ -366,7 +472,8 @@ function renderHostelGrid(filterText) {
   const q = (filterText || '').trim().toLowerCase();
   let filtered = hostels.filter((h) =>
     (!q || h.name.toLowerCase().includes(q) || h.location.toLowerCase().includes(q)) &&
-    (!activeCampusFilter || h.campus === activeCampusFilter)
+    (!activeCampusFilter || h.campus === activeCampusFilter) &&
+    (activeCategory === 'all' || (h.category || 'hostel') === activeCategory)
   );
 
   // When a campus is selected, rank hostels closest-first using the
@@ -410,10 +517,11 @@ function renderHostelGrid(filterText) {
         <div class="hostel-card__block">${blockInner}</div>
         <div class="hostel-card__body">
           <h3>${escapeHtml(h.name)}</h3>
+          <p class="hostel-card__kind">${(h.category || 'hostel') === 'apartment' ? 'Apartment' : 'Hostel'}</p>
           <p class="hostel-card__location">${escapeHtml(h.location)}</p>
           ${h.mapLink ? `<a class="hostel-card__maplink" href="${escapeHtml(h.mapLink)}" target="_blank" rel="noopener">View on Google Maps</a>` : ''}
           <div class="hostel-card__meta">
-            ${openBeds > 0 ? `<span class="pill pill--available">${openBeds} beds open</span>` : `<span class="pill pill--full">Full</span>`}
+            ${totalBeds === 0 ? '' : openBeds > 0 ? `<span class="pill pill--available">${openBeds} of ${totalBeds} room${totalBeds === 1 ? '' : 's'} available</span>` : `<span class="pill pill--full">Fully booked</span>`}
             ${lowestPrice ? `<span>From GHS ${lowestPrice.toLocaleString()}</span>` : ''}
           </div>
         </div>
@@ -432,6 +540,42 @@ function renderHostelGrid(filterText) {
 /* ---------------------------------------------------------
    Room picker modal
 --------------------------------------------------------- */
+let currentModalHostelName = '';
+
+// Live update: keeps the numbers in an open room list in step with
+// the database (someone else booking a room updates it instantly).
+function updateModalAvailability() {
+  const modal = document.getElementById('roomModal');
+  if (!modal || modal.style.display === 'none') return;
+  const rooms = getRooms().filter((r) => r.hostel === currentModalHostelName);
+  let totalOpen = 0, total = 0;
+  rooms.forEach((r) => {
+    const open = Math.max(0, Number(r.beds) - Number(r.filled));
+    totalOpen += open; total += Number(r.beds);
+    const label = modal.querySelector(`[data-room-open="${r.id}"]`);
+    if (label) label.textContent = open > 0 ? `${open} of ${Number(r.beds)} room${Number(r.beds) === 1 ? '' : 's'} available` : 'Fully booked';
+    const btn = modal.querySelector(`[data-book-room="${r.id}"]`);
+    if (btn) { btn.disabled = open <= 0; btn.textContent = open > 0 ? 'Book this room' : 'Fully booked'; }
+  });
+  const sum = document.getElementById('modalAvail');
+  if (sum) {
+    sum.textContent = total === 0 ? '' : totalOpen > 0 ? `${totalOpen} of ${total} rooms available right now` : 'Fully booked';
+    sum.classList.toggle('modal-avail--full', total > 0 && totalOpen === 0);
+  }
+}
+
+function renderAvailabilitySummary() {
+  const el = document.getElementById('availSummary');
+  if (!el) return;
+  const active = new Set(getHostels().filter((h) => h.status === 'active' && (activeCategory === 'all' || (h.category || 'hostel') === activeCategory)).map((h) => h.name));
+  const rooms = getRooms().filter((r) => active.has(r.hostel));
+  const total = rooms.reduce((s, r) => s + Number(r.beds || 0), 0);
+  const open = rooms.reduce((s, r) => s + Math.max(0, Number(r.beds || 0) - Number(r.filled || 0)), 0);
+  if (total === 0) { el.textContent = ''; return; }
+  el.className = 'avail-summary' + (open === 0 ? ' avail-summary--full' : '');
+  el.textContent = open > 0 ? `${open} of ${total} rooms available right now` : 'All rooms are fully booked';
+}
+
 function openRoomModal(hostelId) {
   const hostel = getHostels().find((h) => h.id === hostelId);
   if (!hostel) return;
@@ -442,6 +586,7 @@ function openRoomModal(hostelId) {
     ? `${escapeHtml(hostel.location)} · <a href="${escapeHtml(hostel.mapLink)}" target="_blank" rel="noopener">View on Google Maps</a>`
     : escapeHtml(hostel.location);
 
+  currentModalHostelName = hostel.name;
   const rooms = getRooms().filter((r) => r.hostel === hostel.name);
   const list = document.getElementById('modalRoomList');
 
@@ -455,9 +600,9 @@ function openRoomModal(hostelId) {
   if (rooms.length === 0) {
     list.innerHTML = viewingOfferHtml + `<p class="table__muted-note">No room types listed yet for this hostel.</p>`;
   } else {
-    list.innerHTML = viewingOfferHtml + rooms.map((r) => {
+    list.innerHTML = viewingOfferHtml + `<p class="modal-avail" id="modalAvail"></p>` + rooms.map((r) => {
       const open = Math.max(0, Number(r.beds) - Number(r.filled));
-      const label = r.capacity === '1' ? '1 student / room' : `${r.capacity} students / room`;
+      const label = r.unitName || (r.capacity === '1' ? '1 student / room' : `${r.capacity} students / room`);
       const photosHtml = r.photoURLs?.length
         ? `<div class="client-modal__room-photos">${r.photoURLs.map((url, i) =>
             `<img src="${escapeHtml(cloudinaryThumb(url, 220, 150))}" alt="" loading="lazy" data-lightbox-room="${escapeHtml(r.id)}" data-lightbox-index="${i}">`).join('')}</div>`
@@ -467,11 +612,11 @@ function openRoomModal(hostelId) {
           ${photosHtml}
           <div class="client-modal__room-info">
             <p class="client-modal__room-type">${escapeHtml(label)}</p>
-            <p class="client-modal__room-price">GHS ${Number(r.price).toLocaleString()} / semester</p>
-            <p class="client-modal__room-open">${open > 0 ? `${open} bed${open === 1 ? '' : 's'} open` : 'Full'}</p>
+            <p class="client-modal__room-price">GHS ${Number(r.price).toLocaleString()} / ${escapeHtml(r.pricePeriod || 'semester')}</p>
+            <p class="client-modal__room-open" data-room-open="${escapeHtml(r.id)}">${open > 0 ? `${open} of ${Number(r.beds)} room${Number(r.beds) === 1 ? '' : 's'} available` : 'Fully booked'}</p>
           </div>
           <button class="btn btn--primary" type="button" data-book-room="${escapeHtml(r.id)}" ${open <= 0 ? 'disabled' : ''}>
-            ${open > 0 ? 'Book this room' : 'Full'}
+            ${open > 0 ? 'Book this room' : 'Fully booked'}
           </button>
         </div>
       `;
@@ -499,8 +644,10 @@ function openRoomModal(hostelId) {
   document.getElementById('bookViewingBtn')?.addEventListener('click', () => {
     renderViewingStep(hostel);
   });
+  updateModalAvailability();
 
   document.getElementById('roomModal').style.display = 'flex';
+  updateModalAvailability();
 }
 
 /* ---------------------------------------------------------
@@ -571,13 +718,13 @@ function renderPaymentStep(hostel, room) {
   const list = document.getElementById('modalRoomList');
   if (!list) return;
 
-  const label = room.capacity === '1' ? '1 student / room' : `${room.capacity} students / room`;
+  const label = room.unitName || (room.capacity === '1' ? '1 student / room' : `${room.capacity} students / room`);
   const priceLabel = Number(room.price).toLocaleString();
 
   list.innerHTML = `
     <div class="payment-step">
       <p class="payment-step__room">${escapeHtml(label)} — ${escapeHtml(hostel.name)}</p>
-      <p class="payment-step__price">GHS ${priceLabel} / semester</p>
+      <p class="payment-step__price">GHS ${priceLabel} / ${escapeHtml(room.pricePeriod || 'semester')}</p>
       <div class="field">
         <label for="moveInDate">Move-in date</label>
         <input type="date" id="moveInDate" required>
@@ -618,28 +765,76 @@ function renderPaymentStep(hostel, room) {
     }
 
     const client = getCurrentClient();
-    payWithPaystack({
+    let paid = false;
+    let expired = false;
+    let expiryTimer = null;
+    const handler = payWithPaystack({
       amountGHS: room.price,
       companyCutGHS: result.booking.companyCut,
       subaccountCode: hostel.paystackSubaccount || '',
       email: client.email,
       reference: result.booking.batchNumber,
       onSuccess: async () => {
-        await updateBookingDoc(result.booking.id, { status: 'confirmed' });
+        paid = true;
+        clearTimeout(expiryTimer);
+        let confirmed = { ok: false };
+        try { confirmed = await confirmPaidBooking(result.booking); } catch (e) { console.error('Confirm failed', e); }
+        if (!confirmed.ok) {
+          list.innerHTML = `
+            <div class="payment-step">
+              <p class="payment-step__processing">Payment received — bed no longer available</p>
+              <p class="table__muted-note">Your payment went through after the 10-minute hold ran out, and this room is now full. Please WhatsApp us on <strong>020 995 2614</strong> with your reference <strong>${escapeHtml(result.booking.batchNumber)}</strong> and we will sort it out for you.</p>
+              <button class="btn btn--primary btn--block" type="button" id="paymentDoneBtn">Close</button>
+            </div>`;
+          document.getElementById('paymentDoneBtn').addEventListener('click', closeRoomModal);
+          return;
+        }
         list.innerHTML = `
           <div class="payment-step">
             <p class="payment-step__processing">Payment successful!</p>
-            <p class="table__muted-note">Your batch number is <strong>${escapeHtml(result.booking.batchNumber)}</strong> — save this. Your bed is booked.</p>
+            <p class="table__muted-note">Your batch number is <strong>${escapeHtml(result.booking.batchNumber)}</strong> — save this. Your bed is booked. Your QR code is ready under <strong>My Bookings → Show QR</strong>.</p>
             <button class="btn btn--primary btn--block" type="button" id="paymentDoneBtn">Done</button>
           </div>
         `;
         document.getElementById('paymentDoneBtn').addEventListener('click', closeRoomModal);
       },
       onClose: async () => {
-        await releaseUnpaidBooking(result.booking);
+        if (paid) return; // payment succeeded — keep the bed
+        clearTimeout(expiryTimer);
+        if (expired) return; // the timer already released the bed and showed the message
+        try { await releaseUnpaidBooking(result.booking); } catch (e) { console.warn('Release failed', e.code || e.message); }
         resetBtn();
       },
     });
+
+    // Time limit: the bed is held for 10 minutes. Just after that
+    // ends, close the payment window and send the student back to start
+    // the whole booking again. (If they already approved the payment
+    // on their phone, the success callback still books the room.)
+    if (handler) {
+      const expireNow = async () => {
+        if (paid || expired) return;
+        expired = true;
+        clearTimeout(expiryTimer);
+        document.removeEventListener('visibilitychange', onVisible);
+        try { handler.closeIframe(); } catch (e) { /* already closed */ }
+        try { await releaseUnpaidBooking(result.booking); } catch (e) { console.warn('Release failed', e.code || e.message); }
+        list.innerHTML = `
+          <div class="payment-step">
+            <p class="payment-step__processing">⏱ Time expired</p>
+            <p class="table__muted-note">Your ${HOLD_MINUTES}-minute hold on this room has ended and the bed was released. Please start again and book again.</p>
+            <button class="btn btn--primary btn--block" type="button" id="expiredBackBtn">Start again</button>
+          </div>`;
+        document.getElementById('expiredBackBtn').addEventListener('click', () => openRoomModal(hostel.id));
+      };
+      // If the phone/laptop slept or the tab was in the background, check
+      // the clock the moment the student comes back.
+      const onVisible = () => {
+        if (!document.hidden && Date.now() >= result.booking.holdExpiresAt + HOLD_GRACE_SECONDS * 1000) expireNow();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      expiryTimer = setTimeout(expireNow, (HOLD_MINUTES * 60 + HOLD_GRACE_SECONDS) * 1000);
+    }
   });
 }
 
@@ -727,7 +922,7 @@ function renderMyBookings() {
             : b.checkedIn
               ? '<span class="pill pill--available">Checked in</span>'
               : '<span class="pill pill--warning">Awaiting check-in</span>'}
-        ${b.status === 'confirmed' ? `<button class="btn btn--ghost" type="button" data-qr="${escapeHtml(b.batchNumber)}" style="margin-top:8px;">Show QR</button>` : ''}
+        ${(b.status === 'confirmed' && b.type !== 'viewing') ? `<button class="btn btn--ghost" type="button" data-qr="${escapeHtml(b.batchNumber)}" style="margin-top:8px;">Show QR</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -837,10 +1032,13 @@ function startLiveSync() {
 
   function maybeRender() {
     if (!cachesReady.hostels || !cachesReady.rooms || !cachesReady.bookings) return;
+    renderCategoryChips();
     renderCampusFilterChips();
     renderHostelGrid(currentSearch());
     renderMyBookings();
     renderProfile();
+    renderAvailabilitySummary();
+    updateModalAvailability();
   }
 
   onSnapshot(collection(db, HOSTELS_COLLECTION), (snap) => {
@@ -877,6 +1075,9 @@ export function initClientPortal() {
     }
 
     startLiveSync();
+    // Every minute, free any bed whose 10-minute payment hold ran out.
+    setInterval(sweepExpiredHolds, 60 * 1000);
+    setTimeout(sweepExpiredHolds, 5000);
   });
 }
 

@@ -892,3 +892,12 @@
 
 /* brand sub-title */
 .brand__name::after{content:"RENTAL AGENCY";display:block;font:600 .5rem var(--font-display);letter-spacing:.22em;color:var(--muted);margin-top:1px}
+
+/* ---- Live room availability ---- */
+.avail-summary { display: inline-block; padding: 6px 14px; border-radius: 999px; background: #DDF5E6; color: #0B4A2A; font-weight: 600; font-size: 14px; }
+.avail-summary--full { background: #F9DDE0; color: #8A1F32; }
+.modal-avail { margin: 10px 0 4px; font-weight: 700; color: var(--teal-darkest); }
+.modal-avail--full { color: #8A1F32; }
+
+.hostel-card__kind { font: 600 11px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--teal); margin: 2px 0 4px; }
+#categoryFilterChips { margin-bottom: 10px; }

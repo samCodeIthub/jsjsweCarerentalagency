@@ -51,7 +51,7 @@
     if (logout) { logout.parentNode.insertBefore(btn, logout); return; }
     var actions = document.querySelector('.topbar__actions');
     if (actions) {
-      var av = actions.querySelector('.avatar');
+      var av = actions.querySelector('.avatar') || actions.querySelector('a.btn');
       actions.insertBefore(btn, av || null);
     }
   }

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=3">
   <script type="module" src="firebase-config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
   <link rel="icon" type="image/svg+xml" href="logo-mark.svg">
@@ -31,7 +31,7 @@
 </head>
 <body>
   <header class="scan-top topbar" style="padding:16px">
-    <a class="btn btn--ghost" href="bookings.html">&larr; Back</a>
+    <a class="btn btn--ghost" id="backLink" href="bookings.html">&larr; Back</a>
     <h1>Scan booking QR</h1>
     <div class="topbar__actions"></div>
   </header>
@@ -46,10 +46,14 @@
   </main>
 
   <script type="module">
-    import { requireAdmin } from './auth-guard.js';
+    import { requireStaff } from './auth-guard.js';
     import { db } from './firebase-config.js';
     import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-    requireAdmin();
+    let staff = { role: 'admin', hostel: '' };
+    requireStaff().then((s) => {
+      staff = s;
+      if (s.role === 'partner') $('backLink').href = 'partner-portal.html';
+    });
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -71,6 +75,10 @@
         const snap = await getDocs(query(collection(db, 'bookings'), where('batchNumber', '==', code)));
         if (snap.empty) { show('bad', '<h2>✗ Not found</h2><p>No booking with code ' + esc(code) + '. Do not accept.</p>'); return; }
         const d = snap.docs[0]; const b = d.data();
+        if (staff.role === 'partner' && b.hostel !== staff.hostel) {
+          show('bad', '<h2>✗ Different hostel</h2><p>This booking is for another hostel (' + esc(b.hostel) + '). Do not check in here.</p>');
+          return;
+        }
         const isViewing = b.type === 'viewing';
         const details = '<p><strong>' + esc(b.studentName) + '</strong></p>' +
           '<p>📞 ' + esc(b.phone || '—') + '</p>' +

@@ -19,6 +19,29 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 /* ---------------------------------------------------------
+   Where to send someone after login. If they came through a
+   specific link on the home page (?as=admin / client / partner)
+   the account must match, otherwise they are signed out again
+   and told to use the right link.
+--------------------------------------------------------- */
+const INTENT = new URLSearchParams(location.search).get('as');
+const ROLE_FOR = { admin: 'admin', partner: 'partner', client: 'client' };
+const HOME_FOR = { admin: 'dashboard.html', partner: 'partner-portal.html', client: 'client-portal.html' };
+
+async function routeByRole(role) {
+  const actual = role === 'admin' || role === 'partner' ? role : 'client';
+  if (INTENT && ROLE_FOR[INTENT] && ROLE_FOR[INTENT] !== actual) {
+    await signOut(auth);
+    const label = { admin: 'an admin', partner: 'a hostel manager', client: 'a student' };
+    const err = new Error('This account is ' + label[actual] + ' account, not ' + label[INTENT] + '. Please use the "' +
+      ({ admin: 'Admin', partner: 'Hostel manager', client: 'Student' }[actual]) + ' login" link on the home page.');
+    err.code = 'wrong-role';
+    throw err;
+  }
+  window.location.href = HOME_FOR[actual];
+}
+
+/* ---------------------------------------------------------
    LOGIN — works for both admins and clients.
    After success, checks Firestore to see which one this is,
    and sends them to the right page.
@@ -31,14 +54,7 @@ async function loginUser(email, password) {
     throw new Error('No profile found for this account. Contact the admin.');
   }
 
-  const role = userDoc.data().role;
-  if (role === 'admin') {
-    window.location.href = 'index.html';
-  } else if (role === 'partner') {
-    window.location.href = 'partner-portal.html';
-  } else {
-    window.location.href = 'client-portal.html';
-  }
+  await routeByRole(userDoc.data().role);
 }
 
 /* ---------------------------------------------------------
@@ -66,6 +82,13 @@ async function loginWithGoogle(mode) {
     throw err;
   }
 
+  if (!userDoc.exists() && INTENT && INTENT !== 'client') {
+    try { await deleteUser(cred.user); } catch (e) { await signOut(auth); }
+    const err = new Error('no-account');
+    err.code = 'no-account';
+    throw err;
+  }
+
   if (!userDoc.exists()) {
     // New student signing up with Google — ask for a phone number
     // so the admin and hostel managers can reach them.
@@ -84,14 +107,7 @@ async function loginWithGoogle(mode) {
     return;
   }
 
-  const role = userDoc.data().role;
-  if (role === 'admin') {
-    window.location.href = 'index.html';
-  } else if (role === 'partner') {
-    window.location.href = 'partner-portal.html';
-  } else {
-    window.location.href = 'client-portal.html';
-  }
+  await routeByRole(userDoc.data().role);
 }
 
 /* ---------------------------------------------------------
@@ -129,6 +145,18 @@ document.addEventListener('DOMContentLoaded', () => {
     tabRegister.classList.add('is-active'); tabLogin.classList.remove('is-active');
     registerForm.hidden = false; loginForm.hidden = true;
   }
+  // Admin / partner login links: no sign-up, no Google, clear heading.
+  if (INTENT === 'admin' || INTENT === 'partner') {
+    tabRegister.hidden = true;
+    const tabsRow = tabLogin.closest('.client-auth__tabs');
+    if (tabsRow) tabsRow.style.display = 'none';   // the top "Log In" tab is redundant here
+    ['googleLoginBtn'].forEach((id) => { const b = document.getElementById(id); if (b) b.hidden = true; });
+    document.querySelectorAll('#loginForm .client-auth__divider').forEach((d) => { d.hidden = true; });
+    const note = document.createElement('p');
+    note.style.cssText = 'text-align:center;font-weight:600;margin:0 0 14px;color:var(--teal-darkest)';
+    note.textContent = INTENT === 'admin' ? 'Admin login' : 'Hostel manager login';
+    loginForm.prepend(note);
+  }
   tabLogin.addEventListener('click', showLogin);
   tabRegister.addEventListener('click', showRegister);
 
@@ -150,6 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
           regError.style.display = 'block';
         } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
           // They just closed the popup — nothing to report.
+        } else if (err.code === 'wrong-role' && errorEl) {
+          errorEl.textContent = err.message;
+          errorEl.style.display = 'block';
         } else if (errorEl) {
           errorEl.textContent = 'Google sign-in failed (' + (err.code || err.message) + '). Please try again.';
           errorEl.style.display = 'block';
@@ -171,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await loginUser(email, password);
     } catch (err) {
-      errorEl.textContent = 'Login failed: incorrect email or password.';
+      errorEl.textContent = err.code === 'wrong-role' ? err.message : 'Login failed: incorrect email or password.';
       errorEl.style.display = 'block';
     }
   });

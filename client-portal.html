@@ -10,8 +10,8 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="client-styles.css">
+    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="client-styles.css?v=3">
     <script type="module" src="firebase-config.js"></script>
     <script src="https://js.paystack.co/v1/inline.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -75,8 +75,10 @@
     
         <section id="browse" class="client-section">
             <div class="client-section__head">
-                <h2>Available hostels</h2>
+                <h2>Available places</h2>
+                <p id="availSummary"></p>
             </div>
+            <div class="filter-chips" id="categoryFilterChips"></div>
             <div class="filter-chips" id="locationFilterChips"></div>
             <div class="hostel-grid" id="clientHostelGrid">
                 <!-- rendered by client.js -->
